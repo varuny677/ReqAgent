@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from temporalio.client import Client
 
 from config import settings
-from workflows import CompanySearchWorkflow
+from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
 
 
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,9 @@ app.add_middleware(
 
 # Store chat sessions in memory (session-based)
 chat_sessions: Dict[str, List[Dict[str, Any]]] = {}
+
+# Store company lists for each session (for selection)
+session_company_lists: Dict[str, List[Dict[str, Any]]] = {}
 
 # Temporal client (will be initialized on startup)
 temporal_client: Client = None
@@ -114,6 +117,10 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
     """
     Search for companies using Temporal workflow.
 
+    Handles two modes:
+    1. Company name search - returns numbered list of matching companies
+    2. Number selection - returns detailed JSON info for selected company
+
     Args:
         request: Search request containing query and optional session_id
 
@@ -133,6 +140,7 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
     # Initialize session if new
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
+        session_company_lists[session_id] = []
 
     # Add user message to session
     import datetime
@@ -145,24 +153,108 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
     chat_sessions[session_id].append(user_message)
 
     try:
-        # Execute Temporal workflow
-        workflow_id = f"company-search-{message_id}"
-        logger.info(f"Starting workflow {workflow_id} for query: {request.query}")
+        # Check if query is a number (selection mode)
+        query_stripped = request.query.strip()
+        is_number_selection = query_stripped.isdigit()
 
-        result = await temporal_client.execute_workflow(
-            CompanySearchWorkflow.run,
-            request.query,
-            id=workflow_id,
-            task_queue=settings.temporal_task_queue,
-        )
+        if is_number_selection:
+            # Mode 2: User selected a number from the list
+            selection_number = int(query_stripped)
 
-        logger.info(f"Workflow completed: {workflow_id}")
+            # Validate selection
+            if session_id not in session_company_lists or not session_company_lists[session_id]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No company list found. Please search for companies first."
+                )
+
+            company_list = session_company_lists[session_id]
+            if selection_number < 1 or selection_number > len(company_list):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid selection. Please choose a number between 1 and {len(company_list)}."
+                )
+
+            # Get selected company (1-indexed)
+            selected_company = company_list[selection_number - 1]
+            company_name = selected_company.get("name")
+            company_website = selected_company.get("website")
+
+            logger.info(f"User selected company #{selection_number}: {company_name}")
+
+            # Execute detailed company info workflow
+            workflow_id = f"company-detail-{message_id}"
+            logger.info(f"Starting detail workflow {workflow_id} for: {company_name}")
+
+            result = await temporal_client.execute_workflow(
+                CompanyDetailWorkflow.run,
+                args=[company_name, company_website],
+                id=workflow_id,
+                task_queue=settings.temporal_task_queue,
+            )
+
+            logger.info(f"Detail workflow completed: {workflow_id}")
+
+            # Format the detailed info response
+            detailed_data = result.get("detailed_info", {}).get("data", {})
+
+            response_content = {
+                "mode": "detailed_info",
+                "company_number": selection_number,
+                "data": detailed_data
+            }
+
+        else:
+            # Mode 1: User entered a company name - search and list companies
+            workflow_id = f"company-search-{message_id}"
+            logger.info(f"Starting search workflow {workflow_id} for query: {request.query}")
+
+            result = await temporal_client.execute_workflow(
+                CompanySearchWorkflow.run,
+                request.query,
+                id=workflow_id,
+                task_queue=settings.temporal_task_queue,
+            )
+
+            logger.info(f"Search workflow completed: {workflow_id}")
+
+            # Extract and number the companies
+            search_results = result.get("search_results", {})
+            companies = search_results.get("results", [])
+
+            if isinstance(companies, list) and len(companies) > 0:
+                # Store the company list for this session
+                session_company_lists[session_id] = companies
+
+                # Create numbered list response
+                numbered_companies = []
+                for idx, company in enumerate(companies, start=1):
+                    numbered_company = {
+                        "number": idx,
+                        **company
+                    }
+                    numbered_companies.append(numbered_company)
+
+                response_content = {
+                    "mode": "company_list",
+                    "count": len(numbered_companies),
+                    "companies": numbered_companies,
+                    "message": f"Found {len(numbered_companies)} companies. Please enter a number to get detailed information."
+                }
+            else:
+                response_content = {
+                    "mode": "company_list",
+                    "count": 0,
+                    "companies": [],
+                    "message": "No companies found matching your search.",
+                    "raw_result": result
+                }
 
         # Add assistant response to session
         assistant_message = {
             "id": str(uuid.uuid4()),
             "role": "assistant",
-            "content": result,
+            "content": response_content,
             "timestamp": datetime.datetime.now().isoformat()
         }
         chat_sessions[session_id].append(assistant_message)
@@ -171,11 +263,16 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
             session_id=session_id,
             message_id=message_id,
             query=request.query,
-            results=result
+            results=response_content
         )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Error executing workflow: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=500,
             detail=f"Error searching companies: {str(e)}"

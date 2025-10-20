@@ -139,3 +139,110 @@ async def parse_company_input(user_input: str) -> List[str]:
     activity.logger.info(f"Parsed companies: {companies}")
 
     return companies
+
+
+@activity.defn
+async def get_detailed_company_info(company_name: str, company_website: str = None) -> Dict[str, Any]:
+    """
+    Get detailed information about a specific company using Google Gemini with grounding.
+
+    Args:
+        company_name: The official company name
+        company_website: Optional company website URL for better search
+
+    Returns:
+        Dictionary containing detailed company information in JSON format
+    """
+    activity.logger.info(f"Getting detailed info for company: {company_name}")
+
+    # Configure Gemini
+    genai.configure(api_key=settings.google_api_key)
+
+    # Create the model
+    model = genai.GenerativeModel(
+        model_name=settings.gemini_model
+    )
+
+    # Craft a detailed prompt
+    website_info = f" (Website: {company_website})" if company_website else ""
+    prompt = f"""
+    You are a business intelligence assistant. Please search for detailed information about the company: {company_name}{website_info}
+
+    Provide comprehensive information in the following JSON format:
+
+    {{
+        "Company name": "<official company name>",
+        "Sector": "<primary business sector, e.g., Technology, Healthcare, Finance>",
+        "Sub Sector": "<specific industry/sub-sector>",
+        "Networth": "<market cap, valuation, or net worth with currency>",
+        "No of Employees": "<approximate number of employees>",
+        "Country of origin": "<country where company was founded>",
+        "Global presence": "<Yes/No and brief description of international operations>",
+        "List of countries they operate in": ["<country1>", "<country2>", "..."],
+        "brief about company": "<2-3 sentence summary of what the company does>",
+        "Compliance Requirements": ["<relevant compliance frameworks like GDPR, HIPAA, SOC2, ISO27001, etc.>"]
+    }}
+
+    Important instructions:
+    1. Use your web search capabilities to find the most accurate and up-to-date information
+    2. For "Compliance Requirements", infer based on the company's industry:
+       - Healthcare companies: HIPAA, HITRUST
+       - Financial services: PCI-DSS, SOX, GLBA
+       - Technology/SaaS: SOC2, ISO27001, GDPR
+       - Government contractors: FedRAMP, NIST
+       - General: GDPR (if EU operations), CCPA (if California operations)
+    3. If specific information is not available, use "Insufficient data" for that field
+    4. Ensure the JSON is properly formatted
+    5. For "List of countries they operate in", provide an actual array, not a string
+    """
+
+    try:
+        # Generate response with higher token limit for detailed info
+        generation_config = {
+            'temperature': 0.5,  # Lower temperature for more factual responses
+            'top_p': 0.95,
+            'max_output_tokens': 3072,
+        }
+
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config
+        )
+
+        activity.logger.info("Detailed company info received from Gemini")
+
+        # Extract and parse JSON
+        result_text = response.text
+
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            company_info = json.loads(result_text.strip())
+
+            return {
+                "success": True,
+                "company_name": company_name,
+                "data": company_info
+            }
+
+        except (json.JSONDecodeError, IndexError) as e:
+            activity.logger.warning(f"Could not parse JSON: {e}")
+            activity.logger.warning(f"Raw response: {result_text}")
+            return {
+                "success": False,
+                "company_name": company_name,
+                "error": "Failed to parse response",
+                "raw_response": result_text
+            }
+
+    except Exception as e:
+        activity.logger.error(f"Error getting detailed company info: {str(e)}")
+        return {
+            "success": False,
+            "company_name": company_name,
+            "error": str(e)
+        }

@@ -113,6 +113,111 @@ function App() {
   };
 
   const renderCompanyResults = (results) => {
+    // Handle new two-stage format
+    if (results.mode === 'detailed_info') {
+      // Mode 2: Detailed company information
+      const data = results.data;
+
+      return (
+        <div className="detailed-info">
+          <h2>{data['Company name']}</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <strong>Sector:</strong> {data.Sector}
+            </div>
+            <div className="info-item">
+              <strong>Sub Sector:</strong> {data['Sub Sector']}
+            </div>
+            <div className="info-item">
+              <strong>Net Worth:</strong> {data.Networth}
+            </div>
+            <div className="info-item">
+              <strong>Employees:</strong> {data['No of Employees']}
+            </div>
+            <div className="info-item">
+              <strong>Country of Origin:</strong> {data['Country of origin']}
+            </div>
+            <div className="info-item">
+              <strong>Global Presence:</strong> {data['Global presence']}
+            </div>
+          </div>
+
+          <div className="info-section">
+            <h3>Operating Countries</h3>
+            <div className="countries-list">
+              {Array.isArray(data['List of countries they operate in'])
+                ? data['List of countries they operate in'].join(', ')
+                : data['List of countries they operate in']}
+            </div>
+          </div>
+
+          <div className="info-section">
+            <h3>About</h3>
+            <p>{data['brief about company']}</p>
+          </div>
+
+          <div className="info-section">
+            <h3>Compliance Requirements</h3>
+            <div className="compliance-tags">
+              {Array.isArray(data['Compliance Requirements'])
+                ? data['Compliance Requirements'].map((req, idx) => (
+                    <span key={idx} className="compliance-tag">{req}</span>
+                  ))
+                : <span className="compliance-tag">{data['Compliance Requirements']}</span>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (results.mode === 'company_list') {
+      // Mode 1: Company list with numbers
+      const companies = results.companies;
+
+      if (!companies || companies.length === 0) {
+        return <p>{results.message || 'No companies found.'}</p>;
+      }
+
+      return (
+        <div>
+          <p style={{ marginBottom: '12px', fontWeight: 'bold' }}>
+            {results.message || `Found ${results.count} companies:`}
+          </p>
+          {companies.map((company) => (
+            <div key={company.number} className="company-card">
+              <div className="company-number">{company.number}</div>
+              <div className="company-details">
+                <h3>{company.name || 'N/A'}</h3>
+                {company.description && <p>{company.description}</p>}
+                {company.industry && (
+                  <p>
+                    <strong>Industry:</strong> {company.industry}
+                  </p>
+                )}
+                {company.location && (
+                  <p>
+                    <strong>Location:</strong> {company.location}
+                  </p>
+                )}
+                {company.website && (
+                  <p>
+                    <strong>Website:</strong>{' '}
+                    <a href={company.website} target="_blank" rel="noopener noreferrer">
+                      {company.website}
+                    </a>
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+          <p style={{ marginTop: '16px', fontStyle: 'italic', color: '#666' }}>
+            💡 Enter a number (1-{companies.length}) to get detailed information
+          </p>
+        </div>
+      );
+    }
+
+    // Fallback for old format or errors
     if (!results.success) {
       return (
         <div className="error-message">
@@ -121,47 +226,7 @@ function App() {
       );
     }
 
-    const companies = results.results;
-
-    if (!companies || companies.length === 0) {
-      return <p>No companies found.</p>;
-    }
-
-    if (companies.raw_response) {
-      return <div style={{ whiteSpace: 'pre-wrap' }}>{companies.raw_response}</div>;
-    }
-
-    return (
-      <div>
-        <p style={{ marginBottom: '12px' }}>
-          Found {results.count} {results.count === 1 ? 'company' : 'companies'}:
-        </p>
-        {companies.map((company, index) => (
-          <div key={index} className="company-card">
-            <h3>{company.name || 'N/A'}</h3>
-            {company.description && <p>{company.description}</p>}
-            {company.industry && (
-              <p>
-                <strong>Industry:</strong> {company.industry}
-              </p>
-            )}
-            {company.location && (
-              <p>
-                <strong>Location:</strong> {company.location}
-              </p>
-            )}
-            {company.website && (
-              <p>
-                <strong>Website:</strong>{' '}
-                <a href={company.website} target="_blank" rel="noopener noreferrer">
-                  {company.website}
-                </a>
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    );
+    return <p>No data available</p>;
   };
 
   return (
@@ -193,7 +258,8 @@ function App() {
           {messages.length === 0 ? (
             <div className="empty-state">
               <h1>Company Search Agent</h1>
-              <p>Search for companies by name. Enter multiple company names separated by commas.</p>
+              <p>Search for companies by name to get a numbered list.</p>
+              <p>Then enter a number to get detailed company information.</p>
             </div>
           ) : (
             <div className="messages">
@@ -206,7 +272,7 @@ function App() {
                     {message.role === 'user' ? (
                       <p>{message.content}</p>
                     ) : (
-                      renderCompanyResults(message.content.search_results)
+                      renderCompanyResults(message.content)
                     )}
                   </div>
                 </div>
@@ -238,7 +304,7 @@ function App() {
               <input
                 type="text"
                 className="input-field"
-                placeholder="Search for companies... (e.g., Apple, Microsoft, Google)"
+                placeholder="Enter company name or number... (e.g., metlife or 1)"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 disabled={loading}

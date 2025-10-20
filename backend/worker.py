@@ -11,8 +11,8 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from config import settings
-from workflows import CompanySearchWorkflow
-from activities import search_companies, parse_company_input
+from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
+from activities import search_companies, parse_company_input, get_detailed_company_info
 
 
 logging.basicConfig(level=logging.INFO)
@@ -35,8 +35,8 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=settings.temporal_task_queue,
-        workflows=[CompanySearchWorkflow],
-        activities=[search_companies, parse_company_input],
+        workflows=[CompanySearchWorkflow, CompanyDetailWorkflow],
+        activities=[search_companies, parse_company_input, get_detailed_company_info],
     )
 
     logger.info("Worker started successfully")

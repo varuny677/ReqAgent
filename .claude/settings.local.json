@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create vite@latest . -- --template react)",
+      "Bash(npm install)",
+      "Bash(npm install axios react-icons uuid)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

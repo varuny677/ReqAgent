@@ -1,0 +1,24 @@
+# FastAPI and server dependencies
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+websockets==13.1
+
+# Temporal.io (version compatible with Windows without Rust)
+temporalio==1.6.0
+
+# Google AI and ADK
+google-generativeai==0.8.3
+# Note: google-adk is not yet available on PyPI
+# We'll use google-generativeai directly with tools
+
+# Additional utilities
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.6.0
+aiohttp==3.10.10
+
+# Code quality (PEP8)
+black==24.10.0
+flake8==7.1.1
+isort==5.13.2

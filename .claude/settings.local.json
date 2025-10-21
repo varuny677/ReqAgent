@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npm create vite@latest . -- --template react)",
       "Bash(npm install)",
-      "Bash(npm install axios react-icons uuid)"
+      "Bash(npm install axios react-icons uuid)",
+      "Bash(pip install:*)",
+      "Bash(mv:*)",
+      "Bash(python test_firestore.py:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

@@ -6,7 +6,9 @@ This module provides REST API endpoints and manages Temporal workflow execution.
 
 import logging
 import uuid
-from typing import Dict, Any, List
+import os
+import datetime
+from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +17,7 @@ from temporalio.client import Client
 
 from config import settings
 from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
+from services import FirestoreService
 
 
 logging.basicConfig(level=logging.INFO)
@@ -35,21 +38,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store chat sessions in memory (session-based)
-chat_sessions: Dict[str, List[Dict[str, Any]]] = {}
-
-# Store company lists for each session (for selection)
-session_company_lists: Dict[str, List[Dict[str, Any]]] = {}
-
 # Temporal client (will be initialized on startup)
 temporal_client: Client = None
+
+# Firestore service (will be initialized on startup)
+firestore_service: FirestoreService = None
 
 
 class SearchRequest(BaseModel):
     """Request model for company search."""
 
     query: str
-    session_id: str = None
+    session_id: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -79,8 +79,10 @@ class SessionResponse(BaseModel):
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Initialize Temporal client on startup."""
-    global temporal_client
+    """Initialize Temporal client and Firestore on startup."""
+    global temporal_client, firestore_service
+
+    # Initialize Temporal
     logger.info(f"Connecting to Temporal at {settings.temporal_host}")
     try:
         temporal_client = await Client.connect(
@@ -91,6 +93,21 @@ async def startup_event() -> None:
     except Exception as e:
         logger.error(f"Failed to connect to Temporal: {str(e)}")
         logger.warning("Server will start but search functionality may not work")
+
+    # Initialize Firestore
+    logger.info("Initializing Firestore service")
+    try:
+        credentials_path = os.path.join(
+            os.path.dirname(__file__), "reqagent-c12e92ab61f5.json"
+        )
+        firestore_service = FirestoreService(
+            credentials_path=credentials_path,
+            database_name="reqdb"
+        )
+        logger.info("Successfully initialized Firestore service")
+    except Exception as e:
+        logger.error(f"Failed to initialize Firestore: {str(e)}")
+        logger.warning("Server will start but persistence may not work")
 
 
 @app.get("/")
@@ -106,9 +123,11 @@ async def root() -> Dict[str, str]:
 async def health() -> Dict[str, str]:
     """Health check endpoint."""
     temporal_status = "connected" if temporal_client else "disconnected"
+    firestore_status = "connected" if firestore_service else "disconnected"
     return {
         "status": "healthy",
-        "temporal": temporal_status
+        "temporal": temporal_status,
+        "firestore": firestore_status
     }
 
 
@@ -127,10 +146,18 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
     Returns:
         Search response with results
     """
+    logger.info(f"Received search request: query={request.query}, session_id={request.session_id}")
+
     if not temporal_client:
         raise HTTPException(
             status_code=503,
             detail="Temporal client not connected. Please ensure Temporal server is running."
+        )
+
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
         )
 
     # Generate or use existing session ID
@@ -138,19 +165,26 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
     message_id = str(uuid.uuid4())
 
     # Initialize session if new
-    if session_id not in chat_sessions:
-        chat_sessions[session_id] = []
-        session_company_lists[session_id] = []
+    session = firestore_service.get_session(session_id)
+    if not session:
+        # Create new session with first query as title
+        title = request.query[:30] + ("..." if len(request.query) > 30 else "")
+        session = firestore_service.create_session(
+            session_id=session_id,
+            title=title,
+            preview=request.query
+        )
+        logger.info(f"Created new session: {session_id}")
 
-    # Add user message to session
-    import datetime
-    user_message = {
-        "id": message_id,
-        "role": "user",
-        "content": request.query,
-        "timestamp": datetime.datetime.now().isoformat()
-    }
-    chat_sessions[session_id].append(user_message)
+    # Add user message to Firestore
+    user_message_timestamp = datetime.datetime.now()
+    firestore_service.add_message(
+        session_id=session_id,
+        message_id=message_id,
+        role="user",
+        content=request.query,
+        timestamp=user_message_timestamp
+    )
 
     try:
         # Check if query is a number (selection mode)
@@ -161,14 +195,15 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
             # Mode 2: User selected a number from the list
             selection_number = int(query_stripped)
 
+            # Get company list from Firestore
+            company_list = firestore_service.get_company_list(session_id)
+
             # Validate selection
-            if session_id not in session_company_lists or not session_company_lists[session_id]:
+            if not company_list:
                 raise HTTPException(
                     status_code=400,
                     detail="No company list found. Please search for companies first."
                 )
-
-            company_list = session_company_lists[session_id]
             if selection_number < 1 or selection_number > len(company_list):
                 raise HTTPException(
                     status_code=400,
@@ -223,8 +258,8 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
             companies = search_results.get("results", [])
 
             if isinstance(companies, list) and len(companies) > 0:
-                # Store the company list for this session
-                session_company_lists[session_id] = companies
+                # Store the company list in Firestore
+                firestore_service.set_company_list(session_id, companies)
 
                 # Create numbered list response
                 numbered_companies = []
@@ -250,14 +285,16 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
                     "raw_result": result
                 }
 
-        # Add assistant response to session
-        assistant_message = {
-            "id": str(uuid.uuid4()),
-            "role": "assistant",
-            "content": response_content,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        chat_sessions[session_id].append(assistant_message)
+        # Add assistant response to Firestore
+        assistant_message_id = str(uuid.uuid4())
+        assistant_message_timestamp = datetime.datetime.now()
+        firestore_service.add_message(
+            session_id=session_id,
+            message_id=assistant_message_id,
+            role="assistant",
+            content=response_content,
+            timestamp=assistant_message_timestamp
+        )
 
         return SearchResponse(
             session_id=session_id,
@@ -279,41 +316,98 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
         )
 
 
-@app.get("/api/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: str) -> SessionResponse:
+@app.get("/api/sessions")
+async def list_sessions() -> Dict[str, Any]:
     """
-    Get chat session by ID.
+    List all active sessions (last 20, ordered by most recent).
+
+    Returns:
+        Dictionary with list of sessions
+    """
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        sessions = firestore_service.list_sessions(limit=20)
+
+        # Convert datetime objects to ISO format strings for JSON serialization
+        for session in sessions:
+            if "created_at" in session and session["created_at"]:
+                try:
+                    session["created_at"] = session["created_at"].isoformat()
+                except Exception:
+                    session["created_at"] = None
+            if "updated_at" in session and session["updated_at"]:
+                try:
+                    session["updated_at"] = session["updated_at"].isoformat()
+                except Exception:
+                    session["updated_at"] = None
+
+        return {"sessions": sessions}
+
+    except Exception as e:
+        logger.error(f"Error listing sessions: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing sessions: {str(e)}"
+        )
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session_with_messages(session_id: str) -> Dict[str, Any]:
+    """
+    Get session by ID with all messages.
 
     Args:
         session_id: Session identifier
 
     Returns:
-        Session with all messages
+        Session data with messages
     """
-    if session_id not in chat_sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
 
-    return SessionResponse(
-        session_id=session_id,
-        messages=chat_sessions[session_id]
-    )
+    try:
+        data = firestore_service.get_session_with_messages(session_id)
 
+        if not data:
+            raise HTTPException(status_code=404, detail="Session not found")
 
-@app.get("/api/sessions")
-async def list_sessions() -> Dict[str, List[str]]:
-    """
-    List all active sessions.
+        # Convert datetime objects to ISO format strings
+        session = data["session"]
+        if "created_at" in session and session["created_at"]:
+            session["created_at"] = session["created_at"].isoformat()
+        if "updated_at" in session and session["updated_at"]:
+            session["updated_at"] = session["updated_at"].isoformat()
 
-    Returns:
-        List of session IDs
-    """
-    return {"sessions": list(chat_sessions.keys())}
+        for message in data["messages"]:
+            if "timestamp" in message and message["timestamp"]:
+                message["timestamp"] = message["timestamp"].isoformat()
+
+        return data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting session: {str(e)}"
+        )
 
 
 @app.delete("/api/sessions/{session_id}")
 async def delete_session(session_id: str) -> Dict[str, str]:
     """
-    Delete a chat session.
+    Delete a chat session and all its messages.
 
     Args:
         session_id: Session identifier
@@ -321,11 +415,31 @@ async def delete_session(session_id: str) -> Dict[str, str]:
     Returns:
         Confirmation message
     """
-    if session_id in chat_sessions:
-        del chat_sessions[session_id]
-        return {"message": f"Session {session_id} deleted"}
-    else:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        # Check if session exists
+        session = firestore_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Delete session and all messages
+        firestore_service.delete_session(session_id)
+
+        return {"message": f"Session {session_id} deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting session: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

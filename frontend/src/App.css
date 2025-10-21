@@ -55,22 +55,15 @@
 }
 
 .chat-history-item {
-  padding: 12px;
   margin: 4px 0;
   background-color: transparent;
-  border: none;
-  color: #ececf1;
-  text-align: left;
-  cursor: pointer;
   border-radius: 6px;
-  font-size: 14px;
   transition: background-color 0.2s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 4px;
 }
 
 .chat-history-item:hover {
@@ -79,6 +72,54 @@
 
 .chat-history-item.active {
   background-color: #343541;
+}
+
+.session-button {
+  flex: 1;
+  padding: 8px;
+  background-color: transparent;
+  border: none;
+  color: #ececf1;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0; /* Allow flex children to shrink */
+}
+
+.session-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delete-session-btn {
+  background-color: transparent;
+  border: none;
+  color: #8e8ea0;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.delete-session-btn:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+.loading-sessions,
+.no-sessions {
+  padding: 16px;
+  text-align: center;
+  color: #8e8ea0;
+  font-size: 14px;
 }
 
 .main-content {

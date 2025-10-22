@@ -17,9 +17,7 @@ function App() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // Form state
-  const [showConfigForm, setShowConfigForm] = useState(false);
-  const [configData, setConfigData] = useState(null);
-  const [formLoading, setFormLoading] = useState(false);
+  const [formSaveStatus, setFormSaveStatus] = useState({}); // Track save status per message
 
   const messagesEndRef = useRef(null);
 
@@ -147,12 +145,6 @@ function App() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Check if we should show the configuration form
-      if (response.data.results.mode === 'detailed_info' && response.data.results.show_form) {
-        setConfigData(response.data.results.presumptive_config);
-        setShowConfigForm(true);
-      }
-
       // Refresh sessions list to show the new/updated session
       await fetchSessions();
 
@@ -169,29 +161,33 @@ function App() {
     }
   };
 
-  const handleConfigSubmit = async (formData) => {
-    setFormLoading(true);
+  const handleConfigSubmit = async (messageId, formData) => {
+    setFormSaveStatus((prev) => ({ ...prev, [messageId]: 'saving' }));
     try {
       await axios.post(`${API_BASE_URL}/api/save-config`, {
         session_id: currentSessionId,
         configuration: formData,
       });
 
-      // Show success message
-      alert('Configuration saved! Feature coming soon...');
+      // Show success status
+      setFormSaveStatus((prev) => ({ ...prev, [messageId]: 'saved' }));
 
-      // Close form and re-enable input
-      setShowConfigForm(false);
-      setConfigData(null);
+      // Auto-hide success message after 3 seconds
+      setTimeout(() => {
+        setFormSaveStatus((prev) => ({ ...prev, [messageId]: null }));
+      }, 3000);
     } catch (err) {
       console.error('Error saving configuration:', err);
-      alert('Failed to save configuration. Please try again.');
-    } finally {
-      setFormLoading(false);
+      setFormSaveStatus((prev) => ({ ...prev, [messageId]: 'error' }));
+
+      // Auto-hide error message after 5 seconds
+      setTimeout(() => {
+        setFormSaveStatus((prev) => ({ ...prev, [messageId]: null }));
+      }, 5000);
     }
   };
 
-  const renderCompanyResults = (results) => {
+  const renderCompanyResults = (results, messageId) => {
     // Handle new two-stage format
     if (results.mode === 'detailed_info') {
       // Mode 2: Detailed company information
@@ -245,6 +241,16 @@ function App() {
                 : <span className="compliance-tag">{data['Compliance Requirements']}</span>}
             </div>
           </div>
+
+          {/* Inline Configuration Form */}
+          {results.show_form && results.presumptive_config && (
+            <InlineConfigForm
+              messageId={messageId}
+              initialData={results.presumptive_config}
+              onSubmit={(formData) => handleConfigSubmit(messageId, formData)}
+              saveStatus={formSaveStatus[messageId]}
+            />
+          )}
         </div>
       );
     }
@@ -308,7 +314,491 @@ function App() {
     return <p>No data available</p>;
   };
 
-  // Configuration Form Component
+  // Inline Configuration Form Component (for chat messages)
+  const InlineConfigForm = ({ messageId, initialData, onSubmit, saveStatus }) => {
+    const [formData, setFormData] = useState(initialData || {});
+
+    const industrySectors = [
+      'Aerospace & Defense',
+      'Agriculture & Farming',
+      'Automotive',
+      'Banking & Financial Services',
+      'Biotechnology',
+      'Chemicals',
+      'Construction & Real Estate',
+      'Consumer Goods & Retail',
+      'Education',
+      'Energy & Utilities',
+      'Entertainment & Media',
+      'Food & Beverage',
+      'Government & Public Sector',
+      'Healthcare & Pharmaceuticals',
+      'Hospitality & Tourism',
+      'Insurance',
+      'Legal Services',
+      'Logistics & Transportation',
+      'Manufacturing',
+      'Mining & Metals',
+      'Non-Profit & NGO',
+      'Oil & Gas',
+      'Professional Services',
+      'Telecommunications',
+      'Technology & Software',
+      'Textiles & Apparel',
+      'Others'
+    ];
+
+    const subSectorOptions = {
+      'Aerospace & Defense': [
+        'Aircraft Manufacturing',
+        'Defense Contractors',
+        'Space Technology',
+        'Aviation Services',
+        'Defense Electronics',
+        'Military Equipment',
+        'Satellite Systems',
+        'Drones & UAV'
+      ],
+      'Agriculture & Farming': [
+        'Crop Production',
+        'Livestock & Dairy',
+        'Agricultural Equipment',
+        'AgriTech',
+        'Organic Farming',
+        'Aquaculture',
+        'Forestry',
+        'Seeds & Fertilizers'
+      ],
+      'Automotive': [
+        'Automobile Manufacturing',
+        'Auto Parts & Components',
+        'Electric Vehicles (EV)',
+        'Autonomous Vehicles',
+        'Two-Wheelers',
+        'Commercial Vehicles',
+        'Auto Dealerships',
+        'Aftermarket Services'
+      ],
+      'Banking & Financial Services': [
+        'Retail Banking',
+        'Commercial Banking',
+        'Investment Banking',
+        'FinTech',
+        'Wealth Management',
+        'Asset Management',
+        'Payment Processing',
+        'Digital Banking',
+        'Microfinance',
+        'Credit Unions'
+      ],
+      'Biotechnology': [
+        'Biopharmaceuticals',
+        'Genetic Engineering',
+        'Agricultural Biotech',
+        'Industrial Biotechnology',
+        'Bioinformatics',
+        'Gene Therapy',
+        'Synthetic Biology',
+        'Biomedical Engineering'
+      ],
+      'Chemicals': [
+        'Specialty Chemicals',
+        'Petrochemicals',
+        'Agricultural Chemicals',
+        'Industrial Chemicals',
+        'Polymers & Plastics',
+        'Pharmaceuticals Chemicals',
+        'Fine Chemicals',
+        'Paint & Coatings'
+      ],
+      'Construction & Real Estate': [
+        'Residential Construction',
+        'Commercial Construction',
+        'Infrastructure Development',
+        'Real Estate Development',
+        'Property Management',
+        'REITs',
+        'Construction Materials',
+        'Architecture & Design',
+        'PropTech'
+      ],
+      'Consumer Goods & Retail': [
+        'E-commerce',
+        'Department Stores',
+        'Specialty Retail',
+        'Fast Fashion',
+        'Luxury Goods',
+        'Consumer Electronics',
+        'Home Furnishings',
+        'Supermarkets & Grocery',
+        'Direct-to-Consumer (D2C)',
+        'FMCG'
+      ],
+      'Education': [
+        'K-12 Education',
+        'Higher Education',
+        'EdTech',
+        'Online Learning Platforms',
+        'Vocational Training',
+        'Test Preparation',
+        'Corporate Training',
+        'Educational Content',
+        'Student Services',
+        'International Education'
+      ],
+      'Energy & Utilities': [
+        'Electric Utilities',
+        'Water & Waste Management',
+        'Renewable Energy',
+        'Solar Power',
+        'Wind Energy',
+        'Hydroelectric Power',
+        'Nuclear Energy',
+        'Energy Storage',
+        'Smart Grid',
+        'Gas Distribution'
+      ],
+      'Entertainment & Media': [
+        'Film Production',
+        'Broadcasting',
+        'Streaming Services',
+        'Music Industry',
+        'Publishing',
+        'Gaming',
+        'Sports & Entertainment',
+        'Advertising',
+        'Digital Media',
+        'Social Media'
+      ],
+      'Food & Beverage': [
+        'Food Processing',
+        'Beverage Manufacturing',
+        'Restaurants & QSR',
+        'Food Delivery',
+        'Packaged Foods',
+        'Dairy Products',
+        'Bakery & Confectionery',
+        'Alcoholic Beverages',
+        'Non-Alcoholic Beverages',
+        'Food Tech'
+      ],
+      'Government & Public Sector': [
+        'Federal Government',
+        'State/Provincial Government',
+        'Municipal Government',
+        'Defense & Military',
+        'Public Safety',
+        'Regulatory Agencies',
+        'Public Transportation',
+        'Government IT',
+        'Civic Services'
+      ],
+      'Healthcare & Pharmaceuticals': [
+        'Hospitals & Clinics',
+        'Pharmaceutical Manufacturing',
+        'Medical Devices',
+        'Telemedicine',
+        'Health Insurance',
+        'Clinical Research',
+        'Diagnostics',
+        'Home Healthcare',
+        'Mental Health Services',
+        'Healthcare IT',
+        'Medical Equipment',
+        'Drug Discovery'
+      ],
+      'Hospitality & Tourism': [
+        'Hotels & Resorts',
+        'Travel Agencies',
+        'Airlines',
+        'Cruise Lines',
+        'Event Management',
+        'Theme Parks',
+        'Online Travel Booking',
+        'Vacation Rentals',
+        'Tourism Boards',
+        'Restaurant Chains'
+      ],
+      'Insurance': [
+        'Life Insurance',
+        'Health Insurance',
+        'Property & Casualty',
+        'Auto Insurance',
+        'InsurTech',
+        'Reinsurance',
+        'Commercial Insurance',
+        'Specialty Insurance',
+        'Insurance Brokers'
+      ],
+      'Legal Services': [
+        'Corporate Law',
+        'Litigation',
+        'Intellectual Property',
+        'Legal Technology',
+        'Legal Process Outsourcing',
+        'Compliance & Regulatory',
+        'Immigration Law',
+        'Tax Law',
+        'Real Estate Law'
+      ],
+      'Logistics & Transportation': [
+        'Freight & Shipping',
+        'Warehousing',
+        'Last-Mile Delivery',
+        'Supply Chain Management',
+        'Third-Party Logistics (3PL)',
+        'Fleet Management',
+        'Rail Transport',
+        'Maritime Shipping',
+        'Air Cargo',
+        'Logistics Technology'
+      ],
+      'Manufacturing': [
+        'Industrial Manufacturing',
+        'Consumer Goods Manufacturing',
+        'Electronics Manufacturing',
+        'Textile Manufacturing',
+        'Metal Fabrication',
+        'Machinery & Equipment',
+        'Semiconductor Manufacturing',
+        'Contract Manufacturing',
+        'Additive Manufacturing (3D Printing)',
+        'Process Manufacturing'
+      ],
+      'Mining & Metals': [
+        'Coal Mining',
+        'Metal Ore Mining',
+        'Gold & Precious Metals',
+        'Industrial Minerals',
+        'Steel Production',
+        'Aluminum Production',
+        'Copper Mining',
+        'Rare Earth Elements',
+        'Mining Equipment',
+        'Mineral Processing'
+      ],
+      'Non-Profit & NGO': [
+        'Charitable Organizations',
+        'International Development',
+        'Environmental Conservation',
+        'Human Rights',
+        'Education Foundations',
+        'Healthcare Charities',
+        'Disaster Relief',
+        'Social Services',
+        'Advocacy Groups',
+        'Research Foundations'
+      ],
+      'Oil & Gas': [
+        'Upstream (Exploration & Production)',
+        'Midstream (Transportation & Storage)',
+        'Downstream (Refining & Distribution)',
+        'Oilfield Services',
+        'Petrochemicals',
+        'LNG',
+        'Offshore Drilling',
+        'Pipeline Operations',
+        'Energy Trading'
+      ],
+      'Professional Services': [
+        'Consulting',
+        'Accounting & Audit',
+        'Management Consulting',
+        'HR Consulting',
+        'Market Research',
+        'Public Relations',
+        'Business Process Outsourcing',
+        'IT Consulting',
+        'Strategy Consulting',
+        'Tax Advisory'
+      ],
+      'Telecommunications': [
+        'Mobile Network Operators',
+        'Fixed-Line Telecom',
+        'Internet Service Providers (ISP)',
+        'Satellite Communications',
+        'Telecom Equipment',
+        '5G Infrastructure',
+        'Network Security',
+        'Unified Communications',
+        'VoIP Services',
+        'Telecom Software'
+      ],
+      'Technology & Software': [
+        'Software as a Service (SaaS)',
+        'Cloud Services',
+        'Cybersecurity',
+        'Artificial Intelligence & ML',
+        'Enterprise Software',
+        'Mobile Applications',
+        'DevOps & Infrastructure',
+        'Data Analytics',
+        'Blockchain',
+        'IoT (Internet of Things)',
+        'E-commerce Platforms',
+        'CRM Software',
+        'ERP Systems',
+        'Business Intelligence',
+        'Software Development'
+      ],
+      'Textiles & Apparel': [
+        'Textile Manufacturing',
+        'Garment Manufacturing',
+        'Fashion Design',
+        'Footwear',
+        'Sportswear',
+        'Luxury Fashion',
+        'Fast Fashion',
+        'Technical Textiles',
+        'Home Textiles',
+        'Apparel Retail'
+      ],
+      'Others': [
+        'Environmental Services',
+        'Security Services',
+        'Facility Management',
+        'Printing & Packaging',
+        'Waste Management',
+        'Research & Development',
+        'Think Tanks',
+        'Trade Associations',
+        'Membership Organizations',
+        'Other Industries'
+      ]
+    };
+
+    const cloudProviders = ['AWS', 'Azure', 'GCP'];
+    const continents = ['North America', 'Europe', 'Asia Pacific', 'Middle East', 'South America'];
+    const regionStrategies = ['Single Region', 'Dual Primary Regions', 'Primary + DR'];
+
+    const handleChange = (field, value) => {
+      const newData = { ...formData, [field]: value };
+
+      // Reset sub-sector if industry sector changes
+      if (field === 'industry_sector') {
+        newData.sub_sector = subSectorOptions[value]?.[0] || '';
+      }
+
+      setFormData(newData);
+    };
+
+    const handleFormSubmit = (e) => {
+      e.preventDefault();
+      onSubmit(formData);
+    };
+
+    return (
+      <div className="inline-config-form-section">
+        <h3 className="form-section-title">Presumptive Configuration</h3>
+        <p className="form-section-description">
+          Based on the company information, we've pre-selected these values.
+          Please review and modify as needed.
+        </p>
+
+        <form onSubmit={handleFormSubmit} className="inline-config-form">
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor={`industry_sector_${messageId}`}>Industry Sector *</label>
+              <select
+                id={`industry_sector_${messageId}`}
+                value={formData.industry_sector || ''}
+                onChange={(e) => handleChange('industry_sector', e.target.value)}
+                required
+                disabled={saveStatus === 'saving'}
+              >
+                {industrySectors.map(sector => (
+                  <option key={sector} value={sector}>{sector}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor={`sub_sector_${messageId}`}>Sub-Sector *</label>
+              <select
+                id={`sub_sector_${messageId}`}
+                value={formData.sub_sector || ''}
+                onChange={(e) => handleChange('sub_sector', e.target.value)}
+                required
+                disabled={saveStatus === 'saving'}
+              >
+                {(subSectorOptions[formData.industry_sector] || []).map(subSector => (
+                  <option key={subSector} value={subSector}>{subSector}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor={`cloud_provider_${messageId}`}>Cloud Provider *</label>
+              <select
+                id={`cloud_provider_${messageId}`}
+                value={formData.cloud_provider || ''}
+                onChange={(e) => handleChange('cloud_provider', e.target.value)}
+                required
+                disabled={saveStatus === 'saving'}
+              >
+                {cloudProviders.map(provider => (
+                  <option key={provider} value={provider}>{provider}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor={`target_continent_${messageId}`}>Target Continent *</label>
+              <select
+                id={`target_continent_${messageId}`}
+                value={formData.target_continent || ''}
+                onChange={(e) => handleChange('target_continent', e.target.value)}
+                required
+                disabled={saveStatus === 'saving'}
+              >
+                {continents.map(continent => (
+                  <option key={continent} value={continent}>{continent}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group form-group-full">
+              <label htmlFor={`region_strategy_${messageId}`}>Region Deployment Strategy *</label>
+              <select
+                id={`region_strategy_${messageId}`}
+                value={formData.region_strategy || ''}
+                onChange={(e) => handleChange('region_strategy', e.target.value)}
+                required
+                disabled={saveStatus === 'saving'}
+              >
+                {regionStrategies.map(strategy => (
+                  <option key={strategy} value={strategy}>{strategy}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-footer">
+            {saveStatus && (
+              <div className={`save-status save-status-${saveStatus}`}>
+                {saveStatus === 'saving' && '⏳ Saving configuration...'}
+                {saveStatus === 'saved' && '✓ Configuration saved successfully!'}
+                {saveStatus === 'error' && '✗ Failed to save. Please try again.'}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="continue-btn-inline"
+              disabled={saveStatus === 'saving'}
+            >
+              {saveStatus === 'saving' ? 'Saving...' : 'Continue Questionnaire'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  // Configuration Form Component (OLD - KEEP FOR NOW, WILL REMOVE)
   const ConfigurationForm = ({ initialData, onSubmit, loading }) => {
     const [formData, setFormData] = useState(initialData || {});
 
@@ -784,15 +1274,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* Configuration Form Overlay */}
-      {showConfigForm && (
-        <ConfigurationForm
-          initialData={configData}
-          onSubmit={handleConfigSubmit}
-          loading={formLoading}
-        />
-      )}
-
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header">
@@ -851,7 +1332,7 @@ function App() {
                     {message.role === 'user' ? (
                       <p>{message.content}</p>
                     ) : (
-                      renderCompanyResults(message.content)
+                      renderCompanyResults(message.content, message.id)
                     )}
                   </div>
                 </div>
@@ -883,15 +1364,15 @@ function App() {
               <input
                 type="text"
                 className="input-field"
-                placeholder={showConfigForm ? "Please complete the form above..." : "Enter company name or number... (e.g., metlife or 1)"}
+                placeholder="Enter company name or number... (e.g., metlife or 1)"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                disabled={loading || showConfigForm}
+                disabled={loading}
               />
               <button
                 type="submit"
                 className="send-btn"
-                disabled={loading || !input.trim() || showConfigForm}
+                disabled={loading || !input.trim()}
               >
                 <FiSend />
               </button>

@@ -18,6 +18,7 @@ from temporalio.client import Client
 from config import settings
 from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
 from services import FirestoreService
+from activities import infer_presumptive_config
 
 
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +76,27 @@ class SessionResponse(BaseModel):
 
     session_id: str
     messages: List[Dict[str, Any]]
+
+
+class ConfigRequest(BaseModel):
+    """Request model for generating presumptive configuration."""
+
+    company_data: Dict[str, Any]
+
+
+class ConfigSaveRequest(BaseModel):
+    """Request model for saving configuration."""
+
+    session_id: str
+    configuration: Dict[str, Any]
+
+
+class ConfigResponse(BaseModel):
+    """Response model for configuration."""
+
+    success: bool
+    data: Dict[str, Any]
+    session_id: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -233,10 +255,29 @@ async def search_companies(request: SearchRequest) -> SearchResponse:
             # Format the detailed info response
             detailed_data = result.get("detailed_info", {}).get("data", {})
 
+            # Generate presumptive configuration using AI
+            logger.info("Generating presumptive configuration from company data")
+            try:
+                config_result = await infer_presumptive_config(detailed_data)
+                presumptive_config = config_result.get("data", {})
+                logger.info("Presumptive config generated successfully")
+            except Exception as e:
+                logger.error(f"Error generating config: {str(e)}")
+                # Use defaults if AI fails
+                presumptive_config = {
+                    "industry_sector": "Technology & Software",
+                    "sub_sector": "Enterprise Software",
+                    "cloud_provider": "AWS",
+                    "target_continent": "North America",
+                    "region_strategy": "Single Region"
+                }
+
             response_content = {
                 "mode": "detailed_info",
                 "company_number": selection_number,
-                "data": detailed_data
+                "data": detailed_data,
+                "presumptive_config": presumptive_config,
+                "show_form": True  # Trigger form display in frontend
             }
 
         else:
@@ -439,6 +480,137 @@ async def delete_session(session_id: str) -> Dict[str, str]:
         raise HTTPException(
             status_code=500,
             detail=f"Error deleting session: {str(e)}"
+        )
+
+
+@app.post("/api/generate-config", response_model=ConfigResponse)
+async def generate_presumptive_config(request: ConfigRequest) -> ConfigResponse:
+    """
+    Generate presumptive configuration form values from company data using AI.
+
+    This endpoint uses Temporal activity to call Gemini AI for intelligent
+    inference of configuration values based on company information.
+
+    Args:
+        request: Contains company_data dictionary
+
+    Returns:
+        ConfigResponse with inferred configuration values
+    """
+    logger.info("Received request to generate presumptive config")
+
+    try:
+        # Execute the infer activity directly (not through workflow)
+        # We can call activities directly for simple operations
+        result = await infer_presumptive_config(request.company_data)
+
+        if result.get("success"):
+            logger.info("Successfully generated presumptive config")
+            return ConfigResponse(
+                success=True,
+                data=result.get("data", {})
+            )
+        else:
+            logger.warning(f"Config generation had issues: {result.get('error')}")
+            # Still return the default values provided in the result
+            return ConfigResponse(
+                success=False,
+                data=result.get("data", {})
+            )
+
+    except Exception as e:
+        logger.error(f"Error generating config: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating config: {str(e)}"
+        )
+
+
+@app.post("/api/save-config", response_model=ConfigResponse)
+async def save_configuration(request: ConfigSaveRequest) -> ConfigResponse:
+    """
+    Save user's configuration selections to Firestore.
+
+    Args:
+        request: Contains session_id and configuration data
+
+    Returns:
+        ConfigResponse confirming save operation
+    """
+    logger.info(
+        f"Received request to save config for session: {request.session_id}"
+    )
+
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        # Validate session exists
+        session = firestore_service.get_session(request.session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Save configuration
+        saved_config = firestore_service.save_configuration(
+            request.session_id,
+            request.configuration
+        )
+
+        logger.info(f"Successfully saved config for session: {request.session_id}")
+
+        return ConfigResponse(
+            success=True,
+            data=saved_config,
+            session_id=request.session_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving config: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error saving config: {str(e)}"
+        )
+
+
+@app.get("/api/sessions/{session_id}/config")
+async def get_session_config(session_id: str) -> Dict[str, Any]:
+    """
+    Get saved configuration for a session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Configuration data or empty dict if not found
+    """
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        config = firestore_service.get_configuration(session_id)
+
+        if config:
+            return {"configuration": config}
+        else:
+            return {"configuration": None}
+
+    except Exception as e:
+        logger.error(f"Error getting config: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting config: {str(e)}"
         )
 
 

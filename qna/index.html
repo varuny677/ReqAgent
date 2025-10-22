@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AWS Questionnaire (Dynamic MCQ)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:#f7fafc; margin:0; padding:20px; }
+    .container{ max-width:900px; margin:0 auto; }
+    h1{ text-align:center; margin-bottom:20px }
+    .question{ background:white; padding:16px; border-radius:8px; box-shadow:0 2px 6px rgba(10,10,10,0.06); margin-bottom:12px }
+    .q-title{ font-weight:600; margin-bottom:8px }
+    .options{ display:flex; flex-direction:column; gap:8px }
+    .opt-btn{ padding:10px 12px; border-radius:6px; border:1px solid #e2e8f0; background:#fff; text-align:left; cursor:pointer }
+    .opt-btn.selected{ background:#0ea5e9; color:white; border-color:transparent }
+    .checkbox{ display:inline-flex; align-items:center; gap:8px }
+    input[type=number]{ padding:8px; border-radius:6px; border:1px solid #e2e8f0 }
+    .controls{ display:flex; gap:8px; margin:18px 0 }
+    .btn{ padding:8px 12px; border-radius:6px; border:none; cursor:pointer }
+    .btn.primary{ background:#0ea5e9; color:white }
+    pre{ background:#0f172a; color:#e2e8f0; padding:12px; border-radius:6px; overflow:auto }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AWS Organization — Dynamic MCQ Renderer</h1>
+    <div id="form"></div>
+
+    <div class="controls">
+      <button id="reset" class="btn">Reset</button>
+      <button id="show" class="btn primary">Show Answers (JSON)</button>
+    </div>
+
+    <div id="output" style="margin-top:12px; display:none">
+      <h3>Answers JSON</h3>
+      <pre id="outjson"></pre>
+    </div>
+
+    <p style="margin-top:18px; color:#475569">Notes: This page expects <code>questions.json</code> to be in the same folder. Open <code>index.html</code> in your browser (direct file open is OK). If you prefer a single-file version (no fetch), tell me and I'll provide it.</p>
+  </div>
+
+  <script>
+    let QUESTIONS = []
+    const answers = {} // { id: value }
+
+    function fetchQuestions(){
+      return fetch('questions.json')
+        .then(r => r.json())
+        .then(j => j.questions)
+    }
+
+    function buildMaps(questions){
+      const byId = {}
+      questions.forEach(q => byId[q.id] = q)
+      // find roots (questions that are not referenced as 'next' anywhere)
+      const referenced = new Set()
+      questions.forEach(q => {
+        if(q.next) q.next.forEach(id => referenced.add(id))
+        if(q.options){
+          q.options.forEach(o => { if(o.next) o.next.forEach(id => referenced.add(id)) })
+        }
+      })
+      const roots = questions.filter(q => !referenced.has(q.id)).map(q => q.id)
+      return { byId, roots }
+    }
+
+    function computeVisible(questions, byId, roots){
+      const visible = new Set(roots)
+      let added = true
+      while(added){
+        added = false
+        // iterate in original order to keep ordering
+        for(const q of questions){
+          if(!visible.has(q.id)) continue
+          const val = answers[q.id]
+          // if question has unconditional "next" and has an answer (non-empty), include those
+          if(q.next && val !== undefined && val !== null && !(Array.isArray(val) && val.length===0) && !(typeof val === 'string' && val==='')){
+            q.next.forEach(id => { if(!visible.has(id)){ visible.add(id); added=true } })
+          }
+          // if question has options and user selected option(s) that have next, include them
+          if(q.options && val !== undefined && val !== null){
+            const selected = Array.isArray(val) ? val : [val]
+            selected.forEach(sel => {
+              const opt = q.options.find(o => o.label === sel)
+              if(opt && opt.next) opt.next.forEach(id => { if(!visible.has(id)){ visible.add(id); added=true } })
+            })
+          }
+        }
+      }
+      // return visible ids in original questions order
+      return questions.filter(q => visible.has(q.id))
+    }
+
+    function renderQuestions(visibleQuestions){
+      const container = document.getElementById('form')
+      container.innerHTML = ''
+      visibleQuestions.forEach(q => {
+  // if it's a section title
+  if (q.type === 'section') {
+    const sectionHeader = document.createElement('h2')
+    sectionHeader.textContent = q.title
+    sectionHeader.style.cssText = `
+      margin-top: 30px;
+      margin-bottom: 10px;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1e40af;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 4px;
+    `
+    container.appendChild(sectionHeader)
+    return
+  }
+
+  // regular question
+  const qEl = document.createElement('div')
+  qEl.className = 'question'
+  const title = document.createElement('div')
+  title.className = 'q-title'
+  title.textContent = q.question
+  qEl.appendChild(title)
+
+    //   visibleQuestions.forEach(q => {
+    //     const qEl = document.createElement('div')
+    //     qEl.className = 'question'
+    //     const title = document.createElement('div')
+    //     title.className = 'q-title'
+    //     title.textContent = q.question
+    //     qEl.appendChild(title)
+
+        const optionsWrap = document.createElement('div')
+        optionsWrap.className = 'options'
+
+        if(q.type === 'single'){
+          q.options.forEach(opt => {
+            const b = document.createElement('button')
+            b.type = 'button'
+            b.className = 'opt-btn'
+            if(answers[q.id] === opt.label) b.classList.add('selected')
+            b.textContent = opt.label
+            b.addEventListener('click', () => {
+              // toggle single selection
+              answers[q.id] = opt.label
+              // if selecting same removes selection? keep single-select behaviour where clicking same keeps it selected
+              // Re-render after updating answers
+              rerender()
+            })
+            optionsWrap.appendChild(b)
+          })
+        } else if(q.type === 'multi'){
+          q.options.forEach(opt => {
+            const row = document.createElement('label')
+            row.className = 'checkbox'
+            const cb = document.createElement('input')
+            cb.type = 'checkbox'
+            cb.checked = Array.isArray(answers[q.id]) && answers[q.id].includes(opt.label)
+            cb.addEventListener('change', () => {
+              const cur = Array.isArray(answers[q.id]) ? answers[q.id].slice() : []
+              if(cb.checked){
+                if(!cur.includes(opt.label)) cur.push(opt.label)
+              } else {
+                const idx = cur.indexOf(opt.label)
+                if(idx >= 0) cur.splice(idx,1)
+              }
+              answers[q.id] = cur
+              rerender()
+            })
+            const span = document.createElement('span')
+            span.textContent = opt.label
+            row.appendChild(cb)
+            row.appendChild(span)
+            optionsWrap.appendChild(row)
+          })
+        } else if(q.type === 'input'){
+          const input = document.createElement('input')
+          input.type = 'number'
+          input.value = answers[q.id] || ''
+          input.placeholder = 'Enter number'
+          input.addEventListener('input', e => {
+            answers[q.id] = e.target.value
+            rerender()
+          })
+          optionsWrap.appendChild(input)
+        }
+
+        qEl.appendChild(optionsWrap)
+        container.appendChild(qEl)
+      })
+    }
+
+    function rerender(){
+      const { byId, roots } = buildMaps(QUESTIONS)
+      const visible = computeVisible(QUESTIONS, byId, roots)
+      renderQuestions(visible)
+      // hide output area when answers change
+      document.getElementById('output').style.display = 'none'
+    }
+
+    document.getElementById('reset').addEventListener('click', () => {
+      for(const k in answers) delete answers[k]
+      rerender()
+    })
+
+    document.getElementById('show').addEventListener('click', () => {
+      document.getElementById('outjson').textContent = JSON.stringify(answers, null, 2)
+      document.getElementById('output').style.display = 'block'
+    })
+
+    // initialise
+    fetchQuestions().then(qs => {
+      QUESTIONS = qs
+      rerender()
+    }).catch(err => {
+      document.getElementById('form').innerHTML = '<div style="color:#ef4444">Failed to load questions.json. Make sure it is in the same folder as index.html.</div>'
+      console.error(err)
+    })
+  </script>
+</body>
+</html>

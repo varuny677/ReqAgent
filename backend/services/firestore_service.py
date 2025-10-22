@@ -353,3 +353,71 @@ class FirestoreService:
         except Exception as e:
             logger.error(f"Error setting company list: {str(e)}")
             raise
+
+    # ==================== CONFIGURATION OPERATIONS ====================
+
+    def save_configuration(
+        self, session_id: str, config_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Save presumptive configuration form data for a session.
+
+        Args:
+            session_id: Session identifier
+            config_data: Configuration data dictionary containing:
+                - industry_sector
+                - sub_sector
+                - cloud_provider
+                - target_continent
+                - region_strategy
+
+        Returns:
+            Saved configuration data with timestamp
+        """
+        try:
+            config_with_timestamp = {
+                **config_data,
+                "saved_at": firestore.SERVER_TIMESTAMP,
+            }
+
+            # Save to session document under 'configuration' field
+            self.db.collection("sessions").document(session_id).update({
+                "configuration": config_with_timestamp,
+                "updated_at": firestore.SERVER_TIMESTAMP
+            })
+
+            logger.info(f"Saved configuration for session: {session_id}")
+
+            # Return with actual timestamp
+            config_with_timestamp["saved_at"] = datetime.now()
+            return config_with_timestamp
+
+        except Exception as e:
+            logger.error(f"Error saving configuration: {str(e)}")
+            raise
+
+    def get_configuration(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get saved configuration for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Configuration data dictionary or None if not found
+        """
+        try:
+            session = self.get_session(session_id)
+            if session:
+                config = session.get("configuration")
+                if config:
+                    logger.info(f"Retrieved configuration for session: {session_id}")
+                    return config
+                else:
+                    logger.info(f"No configuration found for session: {session_id}")
+                    return None
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting configuration: {str(e)}")
+            raise

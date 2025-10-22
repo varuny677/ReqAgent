@@ -7,7 +7,15 @@
       "Bash(pip install:*)",
       "Bash(mv:*)",
       "Bash(python test_firestore.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(timeout 5 bash:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /F /PID 14420)",
+      "Bash(taskkill //F //PID 14420)",
+      "Bash(tree:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

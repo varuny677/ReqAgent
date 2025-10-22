@@ -1,0 +1,510 @@
+{
+    "questions": [
+      {
+        "id": "SEC_BS",
+        "title": "BUSINESS STRUCTURE",
+        "type": "section"
+      },
+      {
+        "id": "BS_Q1",
+        "question": "How is your organization structured?",
+        "type": "single",
+        "options": [
+          { "label": "Environment-wise", "next": ["BS_Q1_ENV"] },
+          { "label": "Business Unit-wise", "next": ["BS_Q1_BUS", "BS_Q1_BUS2", "BS_Q1_BUS3"] },
+          { "label": "Region-wise", "next": ["BS_Q1_REG"] }
+        ]
+      },
+      {
+        "id": "BS_Q1_ENV",
+        "question": "Which environments are required?",
+        "type": "multi",
+        "options": [
+          { "label": "Development" },
+          { "label": "Testing" },
+          { "label": "Production" },
+          { "label": "Staging" },
+          { "label": "User acceptance testing" },
+          { "label": "Sandbox" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "BS_Q1_BUS",
+        "question": "How many business units or departments does your organization have?",
+        "type": "input",
+        "next": ["BS_Q1_BUS2"]
+      },
+      {
+        "id": "BS_Q1_BUS2",
+        "question": "Select your main business units:",
+        "type": "multi",
+        "options": [
+          { "label": "Human Resources" },
+          { "label": "Finance" },
+          { "label": "Information Technology" },
+          { "label": "Operations" },
+          { "label": "Sales" },
+          { "label": "Marketing" },
+          { "label": "Legal" },
+          { "label": "Procurement" },
+          { "label": "Research & Development" },
+          { "label": "Customer Service" },
+          { "label": "Other" }
+        ],
+        "next": ["BS_Q1_BUS3"]
+      },
+      {
+        "id": "BS_Q1_BUS3",
+        "question": "Which regions will have separate accounts?",
+        "type": "multi",
+        "options": [
+          { "label": "North America" },
+          { "label": "Europe" },
+          { "label": "Asia Pacific" },
+          { "label": "South America" },
+          { "label": "Middle East" },
+          { "label": "Africa" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "BS_Q1_REG",
+        "question": "Which regions will have separate accounts?",
+        "type": "multi",
+        "options": [
+          { "label": "North America" },
+          { "label": "Europe" },
+          { "label": "Asia Pacific" },
+          { "label": "South America" },
+          { "label": "Middle East" },
+          { "label": "Africa" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "SEC_CL",
+        "title": "Compliance and legal requirements",
+        "type": "section"
+      },
+      {
+        "id": "CL_Q1",
+        "question": "Does your organization operate in a regulated environment?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["CL_Q1_A", "CL_Q1_B", "CL_Q1_C"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "CL_Q1_A",
+        "question": "Which regulatory bodies and regulations does your organization need to adhere to?",
+        "type": "multi",
+        "options": [
+          { "label": "Reserve Bank of India" },
+          { "label": "Securities and Exchange Board of India" },
+          { "label": "Insurance Regulatory and Development Authority" },
+          { "label": "Federal Financial Institutions Examination Council" },
+          { "label": "Monetary Authority of Singapore" },
+          { "label": "Financial Conduct Authority" },
+          { "label": "General Data Protection Regulation" },
+          { "label": "US Department of Health and Human Services" },
+          { "label": "Food and Drug Administration" },
+          { "label": "Securities and Exchange Commission" },
+          { "label": "Financial Industry Regulatory Authority" },
+          { "label": "Office of the Comptroller of the Currency" },
+          { "label": "European Banking Authority" },
+          { "label": "European Securities and Markets Authority" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "CL_Q1_B",
+        "question": "Which compliance standards or frameworks does your organization follow or need to certify against?",
+        "type": "multi",
+        "options": [
+          { "label": "ISO 27001" },
+          { "label": "PCI DSS" },
+          { "label": "SOC 2" },
+          { "label": "NIST CSF" },
+          { "label": "COBIT" },
+          { "label": "CIS Benchmarks" },
+          { "label": "HIPAA" },
+          { "label": "Sarbanes-Oxley Act" },
+          { "label": "FISMA" },
+          { "label": "FedRAMP" },
+          { "label": "ISO 22301" },
+          { "label": "ISO 31000" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "CL_Q1_C",
+        "question": "Do you have data residency requirements?",
+        "type": "single",
+        "options": [
+          { "label": "Yes" },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "SEC_LG",
+        "title": "Audit and Log Requirements",
+        "type": "section"
+      },
+      {
+        "id": "LG_Q1",
+        "question": "What logs must be centralized?",
+        "type": "multi",
+        "options": [
+          { "label": "Application Logs" },
+          { "label": "Security Logs" },
+          { "label": "Audit Logs" },
+          { "label": "Access Logs" },
+          { "label": "System Logs" },
+          { "label": "Network Logs" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "LG_Q2",
+        "question": "How long should logs be retained?",
+        "type": "single",
+        "options": [
+          { "label": "30 days" },
+          { "label": "90 days" },
+          { "label": "1 year" },
+          { "label": "3 years" },
+          { "label": "5 years" },
+          { "label": "7 years" }
+        ]
+      },
+      {
+        "id": "LG_Q3",
+        "question": "Do you use existing log analytics tools?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["LG_Q3_A"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "LG_Q3_A",
+        "question": "Which existing log analytics tools do you use?",
+        "type": "multi",
+        "options": [
+          { "label": "ELK Stack" },
+          { "label": "Datadog" },
+          { "label": "Splunk" },
+          { "label": "Sumo Logic" },
+          { "label": "New Relic" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "LG_Q4",
+        "question": "What log access controls are required?",
+        "type": "multi",
+        "options": [
+          { "label": "Compliance Team Only" },
+          { "label": "Security Team" },
+          { "label": "Audit Team" },
+          { "label": "IT Administrators" },
+          { "label": "Business Users" },
+          { "label": "Read-only Analysts" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "LG_Q5",
+        "question": "Should logs from all environments be consolidated into a single account for governance and investigation purposes?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Single central log account for all environments" },
+          { "label": "No - Separate log accounts per environment" },
+          { "label": "Hybrid - Production separate, non-production consolidated" }
+        ]
+      },
+      {
+        "id": "SEC_NW",
+        "title": "NETWORK REQUIREMENTS",
+        "type": "section"
+      },
+      {
+        "id": "NW_Q1",
+        "question": "Do you require network connectivity between AWS and your on-premises data centers?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["NW_Q1_A", "NW_Q1_B"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "NW_Q1_A",
+        "question": "What connectivity options are available or preferred?",
+        "type": "multi",
+        "options": [
+          { "label": "Site-to-Site VPN over internet" },
+          { "label": "AWS Direct Connect dedicated private connection" },
+          { "label": "Both VPN and Direct Connect hybrid approach" }
+        ]
+      },
+      {
+        "id": "NW_Q1_B",
+        "question": "Is redundancy required for connectivity?",
+        "type": "single",
+        "options": [
+          { "label": "Active-Active load balanced across multiple connections" },
+          { "label": "Active-Passive primary with failover backup" },
+          { "label": "No redundancy required single connection acceptable" }
+        ]
+      },
+      {
+        "id": "NW_Q2",
+        "question": "Should workloads in different environments or business units be isolated at the network level?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Network isolation required", "next": ["NW_Q2_A", "NW_Q2_B", "NW_Q2_C"] },
+          { "label": "No - Shared network acceptable" }
+        ]
+      },
+      {
+        "id": "NW_Q2_A",
+        "question": "Should isolation be achieved using separate VPCs or subnet segmentation?",
+        "type": "single",
+        "options": [
+          { "label": "Separate VPCs for complete network isolation" },
+          { "label": "Subnet segmentation within shared VPC" },
+          { "label": "Hybrid - Critical workloads in separate VPCs, others in subnets" }
+        ]
+      },
+      {
+        "id": "NW_Q2_B",
+        "question": "Will shared services such as Active Directory, DNS, or logging need to communicate across these isolated environments?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Cross-environment communication required" },
+          { "label": "No - Complete isolation acceptable" }
+        ]
+      },
+      {
+        "id": "NW_Q2_C",
+        "question": "Should the design prevent lateral movement between workloads?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Prevent lateral movement with zero-trust approach" },
+          { "label": "No - Allow communication within environment" }
+        ]
+      },
+      {
+        "id": "NW_Q3",
+        "question": "Do you require centralized network services such as DNS, NTP, firewalls, proxies, NAT, or inspection?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Centralized network services required", "next": ["NW_Q3_A", "NW_Q3_B"] },
+          { "label": "No - Distributed services acceptable" }
+        ]
+      },
+      {
+        "id": "NW_Q3_A",
+        "question": "Which services must be centralized?",
+        "type": "multi",
+        "options": [
+          { "label": "DNS" },
+          { "label": "NTP" },
+          { "label": "Firewalls" },
+          { "label": "Proxies" },
+          { "label": "NAT Gateways" },
+          { "label": "Traffic Inspection" },
+          { "label": "Load Balancers" },
+          { "label": "VPN Gateways" },
+          { "label": "Other" }
+        ]
+      },
+      {
+        "id": "NW_Q3_B",
+        "question": "Should all inbound and outbound traffic be inspected centrally before reaching workloads?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - All traffic must be inspected centrally" },
+          { "label": "Selective - Only specific traffic types" },
+          { "label": "No - Local inspection acceptable" }
+        ]
+      },
+      {
+        "id": "NW_Q4",
+        "question": "Are there security or compliance mandates that define how traffic must be inspected or logged?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Specific mandates exist", "next": ["NW_Q4_A", "NW_Q4_B", "NW_Q4_C"] },
+          { "label": "No - No specific mandates" }
+        ]
+      },
+      {
+        "id": "NW_Q4_A",
+        "question": "Do you require centralized inspection or firewalling for east-west or north-south traffic?",
+        "type": "multi",
+        "options": [
+          { "label": "East-West traffic - Internal workload communication" },
+          { "label": "North-South Traffic - External communication" },
+          { "label": "Both East-West and North-South traffic" }
+        ]
+      },
+      {
+        "id": "NW_Q4_B",
+        "question": "Should VPC Flow Logs or packet captures be retained centrally for audit purposes?",
+        "type": "single",
+        "options": [
+          { "label": "VPC Flow Logs only" },
+          { "label": "Full packet captures" },
+          { "label": "Both VPC Flow Logs and packet captures" },
+          { "label": "No central retention required" }
+        ]
+      },
+      {
+        "id": "NW_Q4_C",
+        "question": "Are there encryption-in-transit requirements such as MACsec, IPSec, or TLS enforcement?",
+        "type": "multi",
+        "options": [
+          { "label": "MACsec - Layer 2 encryption for Direct Connect" },
+          { "label": "IPSec - Layer 3 encryption for VPNs" },
+          { "label": "TLS enforcement - Application layer encryption" },
+          { "label": "All traffic must be encrypted" },
+          { "label": "No specific encryption requirements" }
+        ]
+      },
+      {
+        "id": "NW_Q5",
+        "question": "Do workloads or applications need to communicate across accounts or regions?",
+        "type": "single",
+        "options": [
+          { "label": "Yes - Cross-account/region communication required", "next": ["NW_Q5_A"] },
+          { "label": "No - Communication within single account/region only" }
+        ]
+      },
+      {
+        "id": "NW_Q5_A",
+        "question": "Should inter-region traffic be routed through a central gateway or direct peering?",
+        "type": "single",
+        "options": [
+          { "label": "Central gateway - Hub-and-spoke routing" },
+          { "label": "Direct peering - Point-to-point connections" },
+          { "label": "Hybrid approach - Critical via gateway, others direct" }
+        ]
+      },
+      {
+        "id": "SEC_DR",
+        "title": "DISASTER RECOVERY",
+        "type": "section"
+      },
+      {
+        "id": "DR_Q1",
+        "question": "Do you have defined Recovery Time Objective (RTO) and Recovery Point Objective (RPO) targets for workloads?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["DR_Q1_A", "DR_Q1_B"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "DR_Q1_A",
+        "question": "Are RTO/RPO targets uniform across all workloads, or tier-based?",
+        "type": "single",
+        "options": [
+          { "label": "Uniform - Same targets for all workloads" },
+          { "label": "Tier-based - Critical workloads" },
+          { "label": "Tier-based - Important workloads" },
+          { "label": "Tier-based - Non-critical workloads" },
+          { "label": "Custom tiered approach" }
+        ]
+      },
+      {
+        "id": "DR_Q1_B",
+        "question": "Are these RTO/RPO targets dictated by internal policy or external regulations?",
+        "type": "multi",
+        "options": [
+          { "label": "Internal policy" },
+          { "label": "RBI regulations" },
+          { "label": "PCI-DSS" },
+          { "label": "ISO 22301" },
+          { "label": "Other external regulations" }
+        ]
+      },
+      {
+        "id": "DR_Q2",
+        "question": "Do you require a disaster recovery environment for business continuity?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["DR_Q2_A", "DR_Q2_B", "DR_Q2_C", "DR_Q2_D"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "DR_Q2_A",
+        "question": "Should the DR environment be in the same AWS region (multi-AZ) or a different region (multi-region)?",
+        "type": "single",
+        "options": [
+          { "label": "Same region (multi-AZ)" },
+          { "label": "Different region (multi-region)" },
+          { "label": "Both approaches" }
+        ]
+      },
+      {
+        "id": "DR_Q2_B",
+        "question": "What is the expected failover mechanism?",
+        "type": "single",
+        "options": [
+          { "label": "Manual" },
+          { "label": "Semi-automated" },
+          { "label": "Fully automated" }
+        ]
+      },
+      {
+        "id": "DR_Q2_C",
+        "question": "Do you need active-active DR or active-passive?",
+        "type": "single",
+        "options": [
+          { "label": "Active-active - Both sites serving traffic" },
+          { "label": "Active-passive - Standby site ready but not serving" }
+        ]
+      },
+      {
+        "id": "DR_Q2_D",
+        "question": "Should DR testing be scheduled periodically?",
+        "type": "single",
+        "options": [
+          { "label": "Yes" },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "DR_Q3",
+        "question": "Do you have a testing or validation process for DR and backup?",
+        "type": "single",
+        "options": [
+          { "label": "Yes", "next": ["DR_Q3_A", "DR_Q3_B"] },
+          { "label": "No" }
+        ]
+      },
+      {
+        "id": "DR_Q3_A",
+        "question": "How frequently should DR failover/fallback tests be conducted?",
+        "type": "single",
+        "options": [
+          { "label": "Monthly" },
+          { "label": "Quarterly" },
+          { "label": "Semi-annually" },
+          { "label": "Annually" }
+        ]
+      },
+      {
+        "id": "DR_Q3_B",
+        "question": "Should test results be reported for audit and compliance review?",
+        "type": "single",
+        "options": [
+          { "label": "Yes" },
+          { "label": "No" }
+        ]
+      }
+    ]
+  }

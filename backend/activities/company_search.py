@@ -246,3 +246,226 @@ async def get_detailed_company_info(company_name: str, company_website: str = No
             "company_name": company_name,
             "error": str(e)
         }
+
+
+@activity.defn
+async def infer_presumptive_config(company_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Infer presumptive configuration form values from company data using AI.
+
+    This activity uses Gemini to intelligently determine configuration
+    preferences based on company information such as sector, location,
+    global presence, and operating countries.
+
+    Args:
+        company_data: Dictionary containing detailed company information
+                     including Sector, Sub Sector, Country of origin,
+                     Global presence, List of countries they operate in, etc.
+
+    Returns:
+        Dictionary containing presumptive form field values:
+        - industry_sector: Primary industry sector
+        - sub_sector: Specific sub-sector
+        - cloud_provider: Recommended cloud provider (AWS/Azure/GCP)
+        - target_continent: Primary target continent
+        - region_strategy: Deployment region strategy
+    """
+    activity.logger.info("Inferring presumptive configuration from company data")
+
+    # Configure Gemini
+    genai.configure(api_key=settings.google_api_key)
+
+    # Create the model
+    model = genai.GenerativeModel(
+        model_name=settings.gemini_model
+    )
+
+    # Extract relevant company information
+    company_name = company_data.get("Company name", "Unknown")
+    sector = company_data.get("Sector", "")
+    sub_sector = company_data.get("Sub Sector", "")
+    country_of_origin = company_data.get("Country of origin", "")
+    global_presence = company_data.get("Global presence", "")
+    operating_countries = company_data.get("List of countries they operate in", [])
+
+    # Craft the AI prompt
+    prompt = f"""
+    You are an enterprise IT infrastructure consultant. Based on the following company information,
+    provide intelligent presumptive recommendations for their IT infrastructure configuration.
+
+    Company Information:
+    - Company Name: {company_name}
+    - Sector: {sector}
+    - Sub Sector: {sub_sector}
+    - Country of Origin: {country_of_origin}
+    - Global Presence: {global_presence}
+    - Operating Countries: {operating_countries}
+
+    Please analyze this information and provide recommendations in the following JSON format:
+
+    {{
+        "industry_sector": "<Choose ONE from: Aerospace & Defense, Agriculture & Farming, Automotive, Banking & Financial Services, Biotechnology, Chemicals, Construction & Real Estate, Consumer Goods & Retail, Education, Energy & Utilities, Entertainment & Media, Food & Beverage, Government & Public Sector, Healthcare & Pharmaceuticals, Hospitality & Tourism, Insurance, Legal Services, Logistics & Transportation, Manufacturing, Mining & Metals, Non-Profit & NGO, Oil & Gas, Professional Services, Telecommunications, Technology & Software, Textiles & Apparel, Others>",
+        "sub_sector": "<Specific sub-sector based on industry_sector choice>",
+        "cloud_provider": "<Choose ONE from: AWS, Azure, GCP based on company profile and industry>",
+        "target_continent": "<Choose ONE from: North America, Europe, Asia Pacific, Middle East, South America based on primary operations>",
+        "region_strategy": "<Choose ONE from: Single Region, Dual Primary Regions, Primary + DR based on global presence and criticality>"
+    }}
+
+    Guidelines for recommendations:
+    1. Industry Sector Mapping (Choose the most appropriate):
+       - Aerospace & Defense: Aircraft, defense contractors, space technology, aviation services
+       - Agriculture & Farming: Crop production, livestock, AgriTech, aquaculture
+       - Automotive: Auto manufacturing, EV, auto parts, dealerships
+       - Banking & Financial Services: Banking, FinTech, wealth management, payment processing
+       - Biotechnology: Biopharmaceuticals, genetic engineering, gene therapy
+       - Chemicals: Specialty chemicals, petrochemicals, polymers, industrial chemicals
+       - Construction & Real Estate: Construction, real estate development, PropTech, REITs
+       - Consumer Goods & Retail: E-commerce, retail stores, FMCG, luxury goods
+       - Education: K-12, higher education, EdTech, online learning
+       - Energy & Utilities: Electric utilities, renewable energy, water/waste management
+       - Entertainment & Media: Film, broadcasting, streaming, gaming, publishing
+       - Food & Beverage: Food processing, restaurants, beverage manufacturing
+       - Government & Public Sector: Federal/state/municipal government, public safety
+       - Healthcare & Pharmaceuticals: Hospitals, pharmaceutical manufacturing, medical devices
+       - Hospitality & Tourism: Hotels, travel agencies, airlines, tourism
+       - Insurance: Life/health/property insurance, InsurTech, reinsurance
+       - Legal Services: Corporate law, litigation, legal technology
+       - Logistics & Transportation: Freight, warehousing, supply chain, last-mile delivery
+       - Manufacturing: Industrial manufacturing, electronics, semiconductors
+       - Mining & Metals: Mining operations, metal production, mineral processing
+       - Non-Profit & NGO: Charitable organizations, international development, advocacy
+       - Oil & Gas: Exploration, production, refining, oilfield services
+       - Professional Services: Consulting, accounting, market research, BPO
+       - Telecommunications: Mobile networks, ISPs, satellite, telecom equipment
+       - Technology & Software: SaaS, cloud services, cybersecurity, AI/ML, enterprise software
+       - Textiles & Apparel: Textile/garment manufacturing, fashion, footwear
+       - Others: Industries not covered above
+
+    2. Sub-Sector Examples by Industry (Choose specific sub-sector):
+       - Aerospace & Defense: Aircraft Manufacturing, Defense Contractors, Space Technology, Aviation Services, Defense Electronics, Military Equipment, Satellite Systems, Drones & UAV
+       - Agriculture & Farming: Crop Production, Livestock & Dairy, Agricultural Equipment, AgriTech, Organic Farming, Aquaculture, Forestry, Seeds & Fertilizers
+       - Automotive: Automobile Manufacturing, Auto Parts & Components, Electric Vehicles (EV), Autonomous Vehicles, Two-Wheelers, Commercial Vehicles, Auto Dealerships, Aftermarket Services
+       - Banking & Financial Services: Retail Banking, Commercial Banking, Investment Banking, FinTech, Wealth Management, Asset Management, Payment Processing, Digital Banking, Microfinance, Credit Unions
+       - Biotechnology: Biopharmaceuticals, Genetic Engineering, Agricultural Biotech, Industrial Biotechnology, Bioinformatics, Gene Therapy, Synthetic Biology, Biomedical Engineering
+       - Chemicals: Specialty Chemicals, Petrochemicals, Agricultural Chemicals, Industrial Chemicals, Polymers & Plastics, Pharmaceuticals Chemicals, Fine Chemicals, Paint & Coatings
+       - Construction & Real Estate: Residential Construction, Commercial Construction, Infrastructure Development, Real Estate Development, Property Management, REITs, Construction Materials, Architecture & Design, PropTech
+       - Consumer Goods & Retail: E-commerce, Department Stores, Specialty Retail, Fast Fashion, Luxury Goods, Consumer Electronics, Home Furnishings, Supermarkets & Grocery, Direct-to-Consumer (D2C), FMCG
+       - Education: K-12 Education, Higher Education, EdTech, Online Learning Platforms, Vocational Training, Test Preparation, Corporate Training, Educational Content, Student Services, International Education
+       - Energy & Utilities: Electric Utilities, Water & Waste Management, Renewable Energy, Solar Power, Wind Energy, Hydroelectric Power, Nuclear Energy, Energy Storage, Smart Grid, Gas Distribution
+       - Entertainment & Media: Film Production, Broadcasting, Streaming Services, Music Industry, Publishing, Gaming, Sports & Entertainment, Advertising, Digital Media, Social Media
+       - Food & Beverage: Food Processing, Beverage Manufacturing, Restaurants & QSR, Food Delivery, Packaged Foods, Dairy Products, Bakery & Confectionery, Alcoholic Beverages, Non-Alcoholic Beverages, Food Tech
+       - Government & Public Sector: Federal Government, State/Provincial Government, Municipal Government, Defense & Military, Public Safety, Regulatory Agencies, Public Transportation, Government IT, Civic Services
+       - Healthcare & Pharmaceuticals: Hospitals & Clinics, Pharmaceutical Manufacturing, Medical Devices, Telemedicine, Health Insurance, Clinical Research, Diagnostics, Home Healthcare, Mental Health Services, Healthcare IT, Medical Equipment, Drug Discovery
+       - Hospitality & Tourism: Hotels & Resorts, Travel Agencies, Airlines, Cruise Lines, Event Management, Theme Parks, Online Travel Booking, Vacation Rentals, Tourism Boards, Restaurant Chains
+       - Insurance: Life Insurance, Health Insurance, Property & Casualty, Auto Insurance, InsurTech, Reinsurance, Commercial Insurance, Specialty Insurance, Insurance Brokers
+       - Legal Services: Corporate Law, Litigation, Intellectual Property, Legal Technology, Legal Process Outsourcing, Compliance & Regulatory, Immigration Law, Tax Law, Real Estate Law
+       - Logistics & Transportation: Freight & Shipping, Warehousing, Last-Mile Delivery, Supply Chain Management, Third-Party Logistics (3PL), Fleet Management, Rail Transport, Maritime Shipping, Air Cargo, Logistics Technology
+       - Manufacturing: Industrial Manufacturing, Consumer Goods Manufacturing, Electronics Manufacturing, Textile Manufacturing, Metal Fabrication, Machinery & Equipment, Semiconductor Manufacturing, Contract Manufacturing, Additive Manufacturing (3D Printing), Process Manufacturing
+       - Mining & Metals: Coal Mining, Metal Ore Mining, Gold & Precious Metals, Industrial Minerals, Steel Production, Aluminum Production, Copper Mining, Rare Earth Elements, Mining Equipment, Mineral Processing
+       - Non-Profit & NGO: Charitable Organizations, International Development, Environmental Conservation, Human Rights, Education Foundations, Healthcare Charities, Disaster Relief, Social Services, Advocacy Groups, Research Foundations
+       - Oil & Gas: Upstream (Exploration & Production), Midstream (Transportation & Storage), Downstream (Refining & Distribution), Oilfield Services, Petrochemicals, LNG, Offshore Drilling, Pipeline Operations, Energy Trading
+       - Professional Services: Consulting, Accounting & Audit, Management Consulting, HR Consulting, Market Research, Public Relations, Business Process Outsourcing, IT Consulting, Strategy Consulting, Tax Advisory
+       - Telecommunications: Mobile Network Operators, Fixed-Line Telecom, Internet Service Providers (ISP), Satellite Communications, Telecom Equipment, 5G Infrastructure, Network Security, Unified Communications, VoIP Services, Telecom Software
+       - Technology & Software: Software as a Service (SaaS), Cloud Services, Cybersecurity, Artificial Intelligence & ML, Enterprise Software, Mobile Applications, DevOps & Infrastructure, Data Analytics, Blockchain, IoT (Internet of Things), E-commerce Platforms, CRM Software, ERP Systems, Business Intelligence, Software Development
+       - Textiles & Apparel: Textile Manufacturing, Garment Manufacturing, Fashion Design, Footwear, Sportswear, Luxury Fashion, Fast Fashion, Technical Textiles, Home Textiles, Apparel Retail
+       - Others: Environmental Services, Security Services, Facility Management, Printing & Packaging, Waste Management, Research & Development, Think Tanks, Trade Associations, Membership Organizations, Other Industries
+
+    3. Cloud Provider Selection:
+       - AWS: Most versatile, best for startups and tech companies, strong in North America
+       - Azure: Best for enterprises, Windows/Microsoft stack, strong in government and healthcare
+       - GCP: Best for data analytics, ML/AI workloads, strong in APAC
+
+    4. Target Continent:
+       - Base this on Country of Origin and primary Operating Countries
+       - Choose the continent where the company has strongest presence
+
+    5. Region Strategy:
+       - Single Region: Small/medium companies, limited geographic scope
+       - Dual Primary Regions: Large companies with significant global presence
+       - Primary + DR: Critical services requiring disaster recovery (finance, healthcare)
+
+    Provide your response as a valid JSON object only, with no additional explanation.
+    """
+
+    try:
+        # Generate response with configuration for factual inference
+        generation_config = {
+            'temperature': 0.3,  # Lower temperature for consistent recommendations
+            'top_p': 0.90,
+            'max_output_tokens': 1024,
+        }
+
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config
+        )
+
+        activity.logger.info("Presumptive config inference received from Gemini")
+
+        # Extract and parse JSON
+        result_text = response.text
+
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            inferred_config = json.loads(result_text.strip())
+
+            # Validate that all required fields are present
+            required_fields = [
+                "industry_sector",
+                "sub_sector",
+                "cloud_provider",
+                "target_continent",
+                "region_strategy"
+            ]
+
+            for field in required_fields:
+                if field not in inferred_config:
+                    activity.logger.warning(
+                        f"Missing field {field}, using default"
+                    )
+                    inferred_config[field] = "Others" if field == "industry_sector" else "Not specified"
+
+            return {
+                "success": True,
+                "data": inferred_config,
+                "company_name": company_name
+            }
+
+        except (json.JSONDecodeError, IndexError) as e:
+            activity.logger.warning(f"Could not parse JSON: {e}")
+            activity.logger.warning(f"Raw response: {result_text}")
+
+            # Return default values if parsing fails
+            return {
+                "success": False,
+                "error": "Failed to parse AI response",
+                "data": {
+                    "industry_sector": "Technology & Software",
+                    "sub_sector": "Enterprise Software",
+                    "cloud_provider": "AWS",
+                    "target_continent": "North America",
+                    "region_strategy": "Single Region"
+                }
+            }
+
+    except Exception as e:
+        activity.logger.error(
+            f"Error inferring presumptive config: {str(e)}"
+        )
+        # Return default values on error
+        return {
+            "success": False,
+            "error": str(e),
+            "data": {
+                "industry_sector": "Technology & Software",
+                "sub_sector": "Enterprise Software",
+                "cloud_provider": "AWS",
+                "target_continent": "North America",
+                "region_strategy": "Single Region"
+            }
+        }

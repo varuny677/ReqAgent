@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { FiPlus, FiSend, FiMessageSquare, FiUser, FiTrash2 } from 'react-icons/fi';
 import { BsRobot } from 'react-icons/bs';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
+import Questionnaire from './pages/Questionnaire';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-function App() {
-  const [sessions, setSessions] = useState([]);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
+function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange }) {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [sessionsLoading, setSessionsLoading] = useState(true);
 
   // Form state
   const [formSaveStatus, setFormSaveStatus] = useState({}); // Track save status per message
@@ -29,28 +29,19 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Fetch sessions on component mount
+  // Load session when currentSessionId changes
   useEffect(() => {
-    fetchSessions();
-  }, []);
-
-  const fetchSessions = async () => {
-    try {
-      setSessionsLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/api/sessions`);
-      setSessions(response.data.sessions || []);
-    } catch (err) {
-      console.error('Error fetching sessions:', err);
-    } finally {
-      setSessionsLoading(false);
+    if (currentSessionId) {
+      loadSession(currentSessionId);
+    } else {
+      setMessages([]);
     }
-  };
+  }, [currentSessionId]);
 
   const loadSession = async (sessionId) => {
     try {
       setLoading(true);
       setError(null);
-      setCurrentSessionId(sessionId);
 
       const response = await axios.get(`${API_BASE_URL}/api/sessions/${sessionId}`);
       const sessionData = response.data;
@@ -70,41 +61,6 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const deleteSession = async (sessionId, e) => {
-    e.stopPropagation(); // Prevent triggering selectSession
-
-    if (!window.confirm('Are you sure you want to delete this session?')) {
-      return;
-    }
-
-    try {
-      await axios.delete(`${API_BASE_URL}/api/sessions/${sessionId}`);
-
-      // Remove from local state
-      setSessions(sessions.filter((s) => s.id !== sessionId));
-
-      // If we deleted the current session, clear messages
-      if (currentSessionId === sessionId) {
-        setCurrentSessionId(null);
-        setMessages([]);
-      }
-    } catch (err) {
-      console.error('Error deleting session:', err);
-      setError('Failed to delete session');
-    }
-  };
-
-  const createNewChat = () => {
-    setCurrentSessionId(null);
-    setMessages([]);
-    setError(null);
-  };
-
-  const selectSession = (sessionId) => {
-    if (sessionId === currentSessionId) return; // Already loaded
-    loadSession(sessionId);
   };
 
   const handleSubmit = async (e) => {
@@ -146,7 +102,7 @@ function App() {
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Refresh sessions list to show the new/updated session
-      await fetchSessions();
+      await onSessionsChange();
 
     } catch (err) {
       console.error('Error searching companies:', err);
@@ -317,6 +273,16 @@ function App() {
   // Inline Configuration Form Component (for chat messages)
   const InlineConfigForm = ({ messageId, initialData, onSubmit, saveStatus }) => {
     const [formData, setFormData] = useState(initialData || {});
+
+    const handleContinueQuestionnaire = (e) => {
+      e.preventDefault();
+      // Save the form first, then navigate
+      onSubmit(formData);
+      // Navigate to questionnaire after a brief delay to allow save to complete
+      setTimeout(() => {
+        navigate(`/questionnaire/${currentSessionId}`);
+      }, 500);
+    };
 
     const industrySectors = [
       'Aerospace & Defense',
@@ -682,11 +648,6 @@ function App() {
       setFormData(newData);
     };
 
-    const handleFormSubmit = (e) => {
-      e.preventDefault();
-      onSubmit(formData);
-    };
-
     return (
       <div className="inline-config-form-section">
         <h3 className="form-section-title">Presumptive Configuration</h3>
@@ -695,7 +656,7 @@ function App() {
           Please review and modify as needed.
         </p>
 
-        <form onSubmit={handleFormSubmit} className="inline-config-form">
+        <form onSubmit={handleContinueQuestionnaire} className="inline-config-form">
           <div className="form-row">
             <div className="form-group">
               <label htmlFor={`industry_sector_${messageId}`}>Industry Sector *</label>
@@ -1273,47 +1234,7 @@ function App() {
   };
 
   return (
-    <div className="app">
-      {/* Sidebar */}
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <button className="new-chat-btn" onClick={createNewChat}>
-            <FiPlus /> New Chat
-          </button>
-        </div>
-        <div className="chat-history">
-          {sessionsLoading ? (
-            <div className="loading-sessions">Loading sessions...</div>
-          ) : sessions.length === 0 ? (
-            <div className="no-sessions">No sessions yet</div>
-          ) : (
-            sessions.map((session) => (
-              <div
-                key={session.id}
-                className={`chat-history-item ${currentSessionId === session.id ? 'active' : ''}`}
-              >
-                <button
-                  className="session-button"
-                  onClick={() => selectSession(session.id)}
-                >
-                  <FiMessageSquare />
-                  <span className="session-title">{session.title}</span>
-                </button>
-                <button
-                  className="delete-session-btn"
-                  onClick={(e) => deleteSession(session.id, e)}
-                  title="Delete session"
-                >
-                  <FiTrash2 />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="main-content">
+    <div className="main-content">
         <div className="chat-container">
           {messages.length === 0 ? (
             <div className="empty-state">
@@ -1380,6 +1301,125 @@ function App() {
           </div>
         </div>
       </div>
+  );
+}
+
+// Sidebar component that persists across routes
+function Sidebar({ sessions, currentSessionId, sessionsLoading, onNewChat, onSelectSession, onDeleteSession }) {
+  return (
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <button className="new-chat-btn" onClick={onNewChat}>
+          <FiPlus /> New Chat
+        </button>
+      </div>
+      <div className="chat-history">
+        {sessionsLoading ? (
+          <div className="loading-sessions">Loading sessions...</div>
+        ) : sessions.length === 0 ? (
+          <div className="no-sessions">No sessions yet</div>
+        ) : (
+          sessions.map((session) => (
+            <div
+              key={session.id}
+              className={`chat-history-item ${currentSessionId === session.id ? 'active' : ''}`}
+            >
+              <button
+                className="session-button"
+                onClick={() => onSelectSession(session.id)}
+              >
+                <FiMessageSquare />
+                <span className="session-title">{session.title}</span>
+              </button>
+              <button
+                className="delete-session-btn"
+                onClick={(e) => onDeleteSession(session.id, e)}
+                title="Delete session"
+              >
+                <FiTrash2 />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Main App component with routing
+function App() {
+  // We'll manage sessions at the App level so they persist across routes
+  const [sessions, setSessions] = useState([]);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const fetchSessions = async () => {
+    try {
+      setSessionsLoading(true);
+      const response = await axios.get(`${API_BASE_URL}/api/sessions`);
+      setSessions(response.data.sessions || []);
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const createNewChat = () => {
+    setCurrentSessionId(null);
+    navigate('/');
+  };
+
+  const selectSession = (sessionId) => {
+    setCurrentSessionId(sessionId);
+    navigate('/');
+  };
+
+  const deleteSession = async (sessionId, e) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this session?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}/api/sessions/${sessionId}`);
+      setSessions(sessions.filter((s) => s.id !== sessionId));
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null);
+      }
+    } catch (err) {
+      console.error('Error deleting session:', err);
+    }
+  };
+
+  return (
+    <div className="app">
+      <Sidebar
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        sessionsLoading={sessionsLoading}
+        onNewChat={createNewChat}
+        onSelectSession={selectSession}
+        onDeleteSession={deleteSession}
+      />
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <ChatInterface
+              currentSessionId={currentSessionId}
+              setCurrentSessionId={setCurrentSessionId}
+              onSessionsChange={fetchSessions}
+            />
+          }
+        />
+        <Route path="/questionnaire/:sessionId" element={<Questionnaire />} />
+      </Routes>
     </div>
   );
 }

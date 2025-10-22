@@ -16,7 +16,8 @@ from activities import (
     search_companies,
     parse_company_input,
     get_detailed_company_info,
-    infer_presumptive_config
+    infer_presumptive_config,
+    infer_questionnaire_answers
 )
 
 
@@ -45,7 +46,8 @@ async def main() -> None:
             search_companies,
             parse_company_input,
             get_detailed_company_info,
-            infer_presumptive_config
+            infer_presumptive_config,
+            infer_questionnaire_answers
         ],
     )
 

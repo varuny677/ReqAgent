@@ -15,7 +15,9 @@
       "Bash(taskkill /F /PID 14420)",
       "Bash(taskkill //F //PID 14420)",
       "Bash(tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

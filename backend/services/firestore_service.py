@@ -421,3 +421,141 @@ class FirestoreService:
         except Exception as e:
             logger.error(f"Error getting configuration: {str(e)}")
             raise
+
+    # ==================== QUESTIONNAIRE OPERATIONS ====================
+
+    def save_questionnaire(
+        self,
+        session_id: str,
+        answers: Dict[str, Any],
+        ai_predictions: Optional[Dict[str, Any]] = None,
+        ai_assumptions: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Save questionnaire answers and AI predictions for a session.
+
+        Args:
+            session_id: Session identifier
+            answers: User answers dictionary (question_id -> answer)
+            ai_predictions: AI predicted answers (question_id -> prediction)
+            ai_assumptions: AI reasoning for predictions (question_id -> assumption text)
+
+        Returns:
+            Saved questionnaire data with timestamp
+        """
+        try:
+            questionnaire_data = {
+                "answers": answers,
+                "saved_at": firestore.SERVER_TIMESTAMP,
+            }
+
+            if ai_predictions is not None:
+                questionnaire_data["ai_predictions"] = ai_predictions
+
+            if ai_assumptions is not None:
+                questionnaire_data["ai_assumptions"] = ai_assumptions
+
+            # Save to session document under 'questionnaire' field
+            self.db.collection("sessions").document(session_id).update({
+                "questionnaire": questionnaire_data,
+                "updated_at": firestore.SERVER_TIMESTAMP
+            })
+
+            logger.info(f"Saved questionnaire for session: {session_id} ({len(answers)} answers)")
+
+            # Return with actual timestamp
+            questionnaire_data["saved_at"] = datetime.now()
+            return questionnaire_data
+
+        except Exception as e:
+            logger.error(f"Error saving questionnaire: {str(e)}")
+            raise
+
+    def get_questionnaire(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get saved questionnaire data for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Questionnaire data dictionary or None if not found
+        """
+        try:
+            session = self.get_session(session_id)
+            if session:
+                questionnaire = session.get("questionnaire")
+                if questionnaire:
+                    logger.info(f"Retrieved questionnaire for session: {session_id}")
+                    return questionnaire
+                else:
+                    logger.info(f"No questionnaire found for session: {session_id}")
+                    return None
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting questionnaire: {str(e)}")
+            raise
+
+    def save_questionnaire_summary(
+        self,
+        session_id: str,
+        summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Save generated questionnaire summary for a session.
+
+        Args:
+            session_id: Session identifier
+            summary: Generated summary data
+
+        Returns:
+            Saved summary data with timestamp
+        """
+        try:
+            summary_data = {
+                **summary,
+                "generated_at": firestore.SERVER_TIMESTAMP,
+            }
+
+            # Save to session document under 'questionnaire_summary' field
+            self.db.collection("sessions").document(session_id).update({
+                "questionnaire_summary": summary_data,
+                "updated_at": firestore.SERVER_TIMESTAMP
+            })
+
+            logger.info(f"Saved questionnaire summary for session: {session_id}")
+
+            # Return with actual timestamp
+            summary_data["generated_at"] = datetime.now()
+            return summary_data
+
+        except Exception as e:
+            logger.error(f"Error saving questionnaire summary: {str(e)}")
+            raise
+
+    def get_questionnaire_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get saved questionnaire summary for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Summary data dictionary or None if not found
+        """
+        try:
+            session = self.get_session(session_id)
+            if session:
+                summary = session.get("questionnaire_summary")
+                if summary:
+                    logger.info(f"Retrieved questionnaire summary for session: {session_id}")
+                    return summary
+                else:
+                    logger.info(f"No questionnaire summary found for session: {session_id}")
+                    return None
+            return None
+
+        except Exception as e:
+            logger.error(f"Error getting questionnaire summary: {str(e)}")
+            raise

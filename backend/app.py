@@ -18,7 +18,8 @@ from temporalio.client import Client
 from config import settings
 from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
 from services import FirestoreService
-from activities import infer_presumptive_config
+from activities import infer_presumptive_config, infer_questionnaire_answers
+import json
 
 
 logging.basicConfig(level=logging.INFO)
@@ -97,6 +98,34 @@ class ConfigResponse(BaseModel):
     success: bool
     data: Dict[str, Any]
     session_id: Optional[str] = None
+
+
+class QuestionnairePredictRequest(BaseModel):
+    """Request model for questionnaire answer prediction."""
+
+    session_id: str
+    question_ids: List[str]
+    company_data: Dict[str, Any]
+    configuration: Dict[str, Any]
+    current_answers: Dict[str, Any]
+
+
+class QuestionnaireSaveRequest(BaseModel):
+    """Request model for saving questionnaire progress."""
+
+    session_id: str
+    answers: Dict[str, Any]
+    ai_predictions: Optional[Dict[str, Any]] = None
+    ai_assumptions: Optional[Dict[str, Any]] = None
+
+
+class QuestionnaireSubmitRequest(BaseModel):
+    """Request model for submitting completed questionnaire."""
+
+    session_id: str
+    answers: Dict[str, Any]
+    company_data: Dict[str, Any]
+    configuration: Dict[str, Any]
 
 
 @app.on_event("startup")
@@ -611,6 +640,279 @@ async def get_session_config(session_id: str) -> Dict[str, Any]:
         raise HTTPException(
             status_code=500,
             detail=f"Error getting config: {str(e)}"
+        )
+
+
+# ==================== QUESTIONNAIRE ENDPOINTS ====================
+
+@app.get("/api/sessions/{session_id}/questionnaire")
+async def get_questionnaire(session_id: str) -> Dict[str, Any]:
+    """
+    Get saved questionnaire data for a session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Questionnaire data including answers, predictions, and assumptions
+    """
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        questionnaire = firestore_service.get_questionnaire(session_id)
+
+        if questionnaire:
+            return questionnaire
+        else:
+            return {
+                "answers": {},
+                "ai_predictions": {},
+                "ai_assumptions": {}
+            }
+
+    except Exception as e:
+        logger.error(f"Error getting questionnaire: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting questionnaire: {str(e)}"
+        )
+
+
+@app.post("/api/questionnaire/predict")
+async def predict_questionnaire_answers(request: QuestionnairePredictRequest) -> Dict[str, Any]:
+    """
+    Predict answers for questionnaire questions using AI.
+
+    Args:
+        request: Prediction request containing question IDs and context
+
+    Returns:
+        AI predictions, assumptions, and confidence levels
+    """
+    try:
+        logger.info(f"Predicting answers for {len(request.question_ids)} questions")
+
+        # Load questions data
+        questions_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "qna",
+            "Questions.json"
+        )
+
+        with open(questions_file_path, 'r') as f:
+            questions_data = json.load(f)
+
+        # Call the AI activity directly
+        result = await infer_questionnaire_answers(
+            question_ids=request.question_ids,
+            questions_data=questions_data,
+            company_data=request.company_data,
+            configuration=request.configuration,
+            current_answers=request.current_answers
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error predicting questionnaire answers: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error predicting answers: {str(e)}"
+        )
+
+
+@app.post("/api/questionnaire/save")
+async def save_questionnaire(request: QuestionnaireSaveRequest) -> Dict[str, Any]:
+    """
+    Save questionnaire progress to Firestore.
+
+    Args:
+        request: Save request containing answers and predictions
+
+    Returns:
+        Success confirmation
+    """
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        saved_data = firestore_service.save_questionnaire(
+            session_id=request.session_id,
+            answers=request.answers,
+            ai_predictions=request.ai_predictions,
+            ai_assumptions=request.ai_assumptions
+        )
+
+        logger.info(f"Saved questionnaire progress for session: {request.session_id}")
+
+        return {
+            "success": True,
+            "saved_at": saved_data.get("saved_at").isoformat() if saved_data.get("saved_at") else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error saving questionnaire: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error saving questionnaire: {str(e)}"
+        )
+
+
+@app.post("/api/questionnaire/submit")
+async def submit_questionnaire(request: QuestionnaireSubmitRequest) -> Dict[str, Any]:
+    """
+    Submit completed questionnaire and generate summary using gemini-deep-search.
+
+    Args:
+        request: Submit request containing all answers and context
+
+    Returns:
+        Generated summary
+    """
+    if not firestore_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Firestore service not initialized."
+        )
+
+    try:
+        logger.info(f"Submitting questionnaire for session: {request.session_id}")
+
+        # Import genai here to avoid circular imports
+        import google.generativeai as genai
+
+        # Configure Gemini with deep search model
+        genai.configure(api_key=settings.google_api_key)
+
+        # Use Gemini Deep Search Experimental model for comprehensive summary
+        model = genai.GenerativeModel(model_name="gemini-2.0-flash-thinking-exp-1219")
+
+        # Load questions data to provide context
+        questions_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "qna",
+            "Questions.json"
+        )
+
+        with open(questions_file_path, 'r') as f:
+            questions_data = json.load(f)
+
+        # Build a comprehensive prompt for summary generation
+        prompt = f"""
+You are an AWS Landing Zone architecture expert. Generate a comprehensive, structured summary report based on the completed questionnaire.
+
+**Company Information:**
+- Company Name: {request.company_data.get('Company name', 'Unknown')}
+- Sector: {request.company_data.get('Sector', 'N/A')}
+- Sub Sector: {request.company_data.get('Sub Sector', 'N/A')}
+- Industry (Config): {request.configuration.get('industry_sector', 'N/A')}
+- Cloud Provider: {request.configuration.get('cloud_provider', 'N/A')}
+- Target Continent: {request.configuration.get('target_continent', 'N/A')}
+- Region Strategy: {request.configuration.get('region_strategy', 'N/A')}
+- Global Presence: {request.company_data.get('Global presence', 'N/A')}
+- Operating Countries: {request.company_data.get('List of countries they operate in', [])}
+- Compliance Requirements: {request.company_data.get('Compliance Requirements', [])}
+
+**Questionnaire Answers:**
+{json.dumps(request.answers, indent=2)}
+
+**Summary Requirements:**
+Generate a structured, professional AWS Landing Zone design document with the following sections:
+
+1. **Executive Summary** (2-3 paragraphs)
+   - Overview of the company's requirements
+   - Key architectural decisions
+   - Overall landing zone strategy
+
+2. **Business Structure**
+   - Account organization strategy
+   - Environment segregation approach
+   - Business unit or regional account structure
+
+3. **Compliance & Security**
+   - Regulatory requirements
+   - Compliance frameworks
+   - Data residency needs
+   - Security controls
+
+4. **Network Architecture**
+   - Connectivity approach (VPN, Direct Connect, hybrid)
+   - Network isolation strategy
+   - Centralized services design
+   - Traffic inspection and routing
+
+5. **Logging & Audit**
+   - Centralized logging strategy
+   - Log retention policies
+   - Access controls for audit logs
+   - Log consolidation approach
+
+6. **Disaster Recovery**
+   - RTO/RPO requirements
+   - DR environment design
+   - Failover mechanisms
+   - Testing strategy
+
+7. **Recommendations**
+   - Key implementation priorities
+   - Best practices to follow
+   - Potential risks and mitigations
+
+**Format:**
+- Use clear headings and subheadings
+- Bullet points for clarity
+- Professional tone
+- Technical but accessible language
+- Include specific AWS service recommendations where applicable
+
+Generate the complete report now:
+"""
+
+        # Generate the summary
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.4,  # Lower temperature for consistent, professional output
+            max_output_tokens=8192,
+        )
+
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=generation_config
+        )
+
+        summary_text = response.text
+
+        # Save the summary to Firestore
+        summary_data = {
+            "summary_text": summary_text,
+            "model_used": "gemini-2.0-flash-thinking-exp-1219",
+            "answers_count": len(request.answers)
+        }
+
+        firestore_service.save_questionnaire_summary(
+            session_id=request.session_id,
+            summary=summary_data
+        )
+
+        logger.info(f"Generated and saved summary for session: {request.session_id}")
+
+        return {
+            "success": True,
+            "summary": summary_text,
+            "model_used": "gemini-2.0-flash-thinking-exp-1219"
+        }
+
+    except Exception as e:
+        logger.error(f"Error submitting questionnaire: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error submitting questionnaire: {str(e)}"
         )
 
 

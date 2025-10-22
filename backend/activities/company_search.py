@@ -469,3 +469,194 @@ async def infer_presumptive_config(company_data: Dict[str, Any]) -> Dict[str, An
                 "region_strategy": "Single Region"
             }
         }
+
+
+@activity.defn
+async def infer_questionnaire_answers(
+    question_ids: List[str],
+    questions_data: Dict[str, Any],
+    company_data: Dict[str, Any],
+    configuration: Dict[str, Any],
+    current_answers: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Dynamically infer answers for questionnaire questions based on company context.
+
+    This activity uses Gemini AI to intelligently predict answers for landing zone
+    questionnaire questions by analyzing company data, configuration, and current answers.
+    The AI provides dynamic preselections that work with any question structure.
+
+    Args:
+        question_ids: List of question IDs to analyze
+        questions_data: Complete questions data structure from Questions.json
+        company_data: Detailed company information
+        configuration: Presumptive configuration (industry, cloud provider, etc.)
+        current_answers: Previously answered questions for context
+
+    Returns:
+        Dictionary containing:
+        - predictions: Dict mapping question_id to predicted answer(s)
+        - assumptions: Dict mapping question_id to AI reasoning (3-4 lines)
+        - confidence: Dict mapping question_id to confidence level (high/medium/low)
+    """
+    activity.logger.info(f"Inferring answers for {len(question_ids)} questions")
+
+    try:
+        # Configure Gemini
+        genai.configure(api_key=settings.google_api_key)
+
+        # Use Gemini 2.0 Flash with moderate temperature for balanced predictions
+        model = genai.GenerativeModel(model_name=settings.gemini_model)
+
+        # Extract relevant data for context
+        company_name = company_data.get("Company name", "Unknown")
+        sector = company_data.get("Sector", "")
+        sub_sector = company_data.get("Sub Sector", "")
+        global_presence = company_data.get("Global presence", "")
+        operating_countries = company_data.get("List of countries they operate in", [])
+        compliance_requirements = company_data.get("Compliance Requirements", [])
+
+        # Build questions context
+        questions_context = []
+        all_questions = questions_data.get("questions", [])
+
+        for qid in question_ids:
+            q = next((item for item in all_questions if item.get("id") == qid), None)
+            if q and q.get("type") != "section":
+                questions_context.append({
+                    "id": q.get("id"),
+                    "question": q.get("question"),
+                    "type": q.get("type"),
+                    "options": [opt.get("label") for opt in q.get("options", [])] if q.get("options") else None
+                })
+
+        # Craft the AI prompt with dynamic analysis instructions
+        prompt = f"""
+You are an expert AWS Landing Zone architect. Analyze the company information and predict appropriate answers for the following questionnaire questions.
+
+**IMPORTANT INSTRUCTIONS:**
+1. Your predictions must be DYNAMIC - analyze each question based on its content, not hardcoded rules
+2. For questions with options, compare the company's characteristics against each option to select the best match
+3. For multi-select questions, you can select multiple options that apply
+4. For text input questions, provide a concise, specific answer based on company context
+5. If insufficient data exists to make a confident prediction, return "NOT_ENOUGH_DATA"
+6. Provide clear reasoning (3-4 lines) explaining your prediction
+
+**Company Context:**
+- Company Name: {company_name}
+- Sector: {sector}
+- Sub Sector: {sub_sector}
+- Industry (Config): {configuration.get('industry_sector', 'N/A')}
+- Cloud Provider: {configuration.get('cloud_provider', 'N/A')}
+- Target Continent: {configuration.get('target_continent', 'N/A')}
+- Global Presence: {global_presence}
+- Operating Countries: {operating_countries}
+- Compliance Requirements: {compliance_requirements}
+
+**Previously Answered Questions (for context):**
+{json.dumps(current_answers, indent=2) if current_answers else "None"}
+
+**Questions to Analyze:**
+{json.dumps(questions_context, indent=2)}
+
+**Response Format (JSON only):**
+{{
+    "predictions": {{
+        "QUESTION_ID": "answer" | ["answer1", "answer2"] | "NOT_ENOUGH_DATA",
+        // For single choice: provide one option label as string
+        // For multiple choice: provide array of option labels
+        // For text input: provide a specific text answer
+        // If insufficient data: use "NOT_ENOUGH_DATA"
+    }},
+    "assumptions": {{
+        "QUESTION_ID": "3-4 line explanation of reasoning based on company characteristics and question requirements"
+    }},
+    "confidence": {{
+        "QUESTION_ID": "high" | "medium" | "low"
+    }}
+}}
+
+**Analysis Guidelines:**
+1. **Business Structure Questions**: Consider company size, global presence, operating model
+2. **Compliance Questions**: Look at industry regulations, compliance requirements, data residency needs
+3. **Network Questions**: Analyze global operations, connectivity needs, security requirements
+4. **Disaster Recovery Questions**: Consider industry criticality, compliance mandates, business continuity needs
+5. **Log/Audit Questions**: Review compliance requirements and industry standards
+
+Respond with ONLY the JSON object, no additional text or markdown.
+"""
+
+        # Generate response with appropriate temperature
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.5,  # Balanced creativity and consistency
+            max_output_tokens=4096,
+        )
+
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=generation_config
+        )
+
+        activity.logger.info("Questionnaire inference received from Gemini")
+
+        # Extract and parse JSON
+        result_text = response.text
+
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            inference_result = json.loads(result_text.strip())
+
+            # Validate structure
+            predictions = inference_result.get("predictions", {})
+            assumptions = inference_result.get("assumptions", {})
+            confidence = inference_result.get("confidence", {})
+
+            # Filter out NOT_ENOUGH_DATA responses
+            filtered_predictions = {}
+            filtered_assumptions = {}
+            filtered_confidence = {}
+
+            for qid in question_ids:
+                pred = predictions.get(qid)
+                if pred and pred != "NOT_ENOUGH_DATA":
+                    filtered_predictions[qid] = pred
+                    filtered_assumptions[qid] = assumptions.get(qid, "AI prediction based on company context")
+                    filtered_confidence[qid] = confidence.get(qid, "medium")
+                else:
+                    # Provide a clear message when insufficient data
+                    filtered_assumptions[qid] = "Not enough data available to make a confident prediction. Please answer manually based on your specific requirements."
+
+            return {
+                "success": True,
+                "predictions": filtered_predictions,
+                "assumptions": filtered_assumptions,
+                "confidence": filtered_confidence
+            }
+
+        except (json.JSONDecodeError, IndexError) as e:
+            activity.logger.warning(f"Could not parse JSON: {e}")
+            activity.logger.warning(f"Raw response: {result_text[:500]}")
+
+            # Return empty predictions on parse error
+            return {
+                "success": False,
+                "error": "Failed to parse AI response",
+                "predictions": {},
+                "assumptions": {qid: "AI analysis failed. Please answer manually." for qid in question_ids},
+                "confidence": {}
+            }
+
+    except Exception as e:
+        activity.logger.error(f"Error inferring questionnaire answers: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "predictions": {},
+            "assumptions": {qid: f"Error during AI analysis: {str(e)}" for qid in question_ids},
+            "confidence": {}
+        }

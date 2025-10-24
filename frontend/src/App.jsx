@@ -635,7 +635,7 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
 
     const cloudProviders = ['AWS', 'Azure'];
     const continents = ['North America', 'Europe', 'Asia Pacific', 'Middle East', 'South America'];
-    const regionStrategies = ['Single Region', 'Dual Primary Regions', 'Primary + DR'];
+    const regionStrategies = ['Single Region', 'Primary + DR'];
 
     const handleChange = (field, value) => {
       const newData = { ...formData, [field]: value };
@@ -1114,7 +1114,7 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
 
     const cloudProviders = ['AWS', 'Azure'];
     const continents = ['North America', 'Europe', 'Asia Pacific', 'Middle East', 'South America'];
-    const regionStrategies = ['Single Region', 'Dual Primary Regions', 'Primary + DR'];
+    const regionStrategies = ['Single Region', 'Primary + DR'];
 
     const handleChange = (field, value) => {
       const newData = { ...formData, [field]: value };

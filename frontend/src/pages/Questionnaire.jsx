@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import questionsData from '../../../qna/Questions.json';
+import awsQuestionsData from '../../../qna/Questions.json';
+import azureQuestionsData from '../../../qna/questionsazure.json';
 import './Questionnaire.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -11,7 +12,7 @@ function Questionnaire() {
   const navigate = useNavigate();
 
   // State
-  const [questions] = useState(questionsData.questions);
+  const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [aiPredictions, setAiPredictions] = useState({});
   const [aiAssumptions, setAiAssumptions] = useState({});
@@ -28,9 +29,18 @@ function Questionnaire() {
     loadSessionData();
   }, [sessionId]);
 
+  // Load appropriate questions based on cloud provider
+  useEffect(() => {
+    if (configData?.cloud_provider) {
+      loadQuestionsByProvider(configData.cloud_provider);
+    }
+  }, [configData]);
+
   // Compute visible questions whenever answers change
   useEffect(() => {
-    computeVisibleQuestions();
+    if (questions.length > 0) {
+      computeVisibleQuestions();
+    }
   }, [answers, questions]);
 
   // Auto-trigger AI analysis when visible questions change
@@ -45,6 +55,35 @@ function Questionnaire() {
       }
     }
   }, [visibleQuestions, companyData, configData]);
+
+  const loadQuestionsByProvider = (provider) => {
+    let questionsToLoad = [];
+
+    if (provider === 'Azure') {
+      // Load Azure questions - flatten sections into questions array
+      if (azureQuestionsData.sections) {
+        azureQuestionsData.sections.forEach((section) => {
+          // Add section as a header
+          questionsToLoad.push({
+            id: `section_${section.title}`,
+            type: 'section',
+            title: section.title
+          });
+          // Add all questions from this section
+          questionsToLoad.push(...section.questions.map(q => ({
+            ...q,
+            question: q.text, // Map 'text' to 'question' for consistency
+            type: 'single' // Azure questions are single-choice based on the structure
+          })));
+        });
+      }
+    } else {
+      // Default to AWS questions
+      questionsToLoad = awsQuestionsData.questions || [];
+    }
+
+    setQuestions(questionsToLoad);
+  };
 
   const loadSessionData = async () => {
     try {
@@ -121,13 +160,17 @@ function Questionnaire() {
 
       if (question.type === 'single' && answer) {
         // Find the selected option
-        const selectedOption = question.options?.find(opt => opt.label === answer);
+        const selectedOption = question.options?.find(opt =>
+          opt.label === answer || opt.value === answer
+        );
         if (selectedOption?.next) {
           selectedOption.next.forEach(traverse);
         }
       } else if (question.type === 'multi' && Array.isArray(answer) && answer.length > 0) {
         // For multi-select, check all selected options for next questions
-        const selectedOptions = question.options?.filter(opt => answer.includes(opt.label)) || [];
+        const selectedOptions = question.options?.filter(opt =>
+          answer.includes(opt.label) || answer.includes(opt.value)
+        ) || [];
         selectedOptions.forEach(opt => {
           if (opt.next) {
             opt.next.forEach(traverse);
@@ -146,7 +189,7 @@ function Questionnaire() {
       }
     };
 
-    // Start with root questions (those not referenced in any 'next')
+    // Start with root questions (those not referenced in any 'next' or those marked with show: true)
     const allNextIds = new Set();
     questions.forEach((q) => {
       if (q.next) {
@@ -161,7 +204,20 @@ function Questionnaire() {
       }
     });
 
-    const rootQuestions = questions.filter(q => !allNextIds.has(q.id));
+    // For Azure questions, also check the 'show' property and 'parent' property
+    const rootQuestions = questions.filter(q => {
+      // Sections are always root
+      if (q.type === 'section') return true;
+
+      // Questions with show: true and no parent are root
+      if (q.show === true && !q.parent) return true;
+
+      // Questions not referenced in any 'next' are root
+      if (!allNextIds.has(q.id) && q.show !== false) return true;
+
+      return false;
+    });
+
     rootQuestions.forEach(q => traverse(q.id));
 
     setVisibleQuestions(visible);
@@ -369,35 +425,43 @@ function Questionnaire() {
           {/* Single choice */}
           {question.type === 'single' && (
             <div className="options-container">
-              {question.options.map((option, idx) => (
-                <label key={idx} className="option-label radio-option">
-                  <input
-                    type="radio"
-                    name={question.id}
-                    value={option.label}
-                    checked={answers[question.id] === option.label}
-                    onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
+              {question.options.map((option, idx) => {
+                const optionValue = option.value || option.label;
+                const optionLabel = option.label;
+                return (
+                  <label key={idx} className="option-label radio-option">
+                    <input
+                      type="radio"
+                      name={question.id}
+                      value={optionValue}
+                      checked={answers[question.id] === optionValue || answers[question.id] === optionLabel}
+                      onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                    />
+                    <span>{optionLabel}</span>
+                  </label>
+                );
+              })}
             </div>
           )}
 
           {/* Multiple choice */}
           {question.type === 'multi' && (
             <div className="options-container">
-              {question.options.map((option, idx) => (
-                <label key={idx} className="option-label checkbox-option">
-                  <input
-                    type="checkbox"
-                    value={option.label}
-                    checked={(answers[question.id] || []).includes(option.label)}
-                    onChange={() => handleAnswerChange(question.id, option.label, true)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
+              {question.options.map((option, idx) => {
+                const optionValue = option.value || option.label;
+                const optionLabel = option.label;
+                return (
+                  <label key={idx} className="option-label checkbox-option">
+                    <input
+                      type="checkbox"
+                      value={optionValue}
+                      checked={(answers[question.id] || []).includes(optionValue) || (answers[question.id] || []).includes(optionLabel)}
+                      onChange={() => handleAnswerChange(question.id, optionValue, true)}
+                    />
+                    <span>{optionLabel}</span>
+                  </label>
+                );
+              })}
             </div>
           )}
 

@@ -787,6 +787,7 @@ async def submit_questionnaire(request: QuestionnaireSubmitRequest) -> Dict[str,
 
         # Import genai here to avoid circular imports
         import google.generativeai as genai
+        from datetime import datetime
 
         # Configure Gemini with deep search model
         genai.configure(api_key=settings.google_api_key)
@@ -794,19 +795,34 @@ async def submit_questionnaire(request: QuestionnaireSubmitRequest) -> Dict[str,
         # Use Gemini Deep Search Experimental model for comprehensive summary
         model = genai.GenerativeModel(model_name="gemini-2.0-flash-thinking-exp-1219")
 
-        # Load questions data to provide context
-        questions_file_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "qna",
-            "Questions.json"
-        )
+        # Get cloud provider and determine which questions file to load
+        cloud_provider = request.configuration.get('cloud_provider', 'AWS')
+
+        # Load appropriate questions data to provide context
+        if cloud_provider == 'Azure':
+            questions_file_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "qna",
+                "questionsazure.json"
+            )
+        else:
+            questions_file_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "qna",
+                "Questions.json"
+            )
 
         with open(questions_file_path, 'r') as f:
             questions_data = json.load(f)
 
+        # Get current date in a professional format
+        current_date = datetime.now().strftime("%B %d, %Y")
+
         # Build a comprehensive prompt for summary generation
         prompt = f"""
-You are an AWS Landing Zone architecture expert. Generate a comprehensive, structured summary report based on the completed questionnaire.
+You are a {cloud_provider} Landing Zone architecture expert. Generate a comprehensive, structured summary report based on the completed questionnaire.
+
+**IMPORTANT: Use the following date in the report: {current_date}**
 
 **Company Information:**
 - Company Name: {request.company_data.get('Company name', 'Unknown')}
@@ -824,7 +840,7 @@ You are an AWS Landing Zone architecture expert. Generate a comprehensive, struc
 {json.dumps(request.answers, indent=2)}
 
 **Summary Requirements:**
-Generate a structured, professional AWS Landing Zone design document with the following sections:
+Generate a structured, professional {cloud_provider} Landing Zone design document with the following sections:
 
 1. **Executive Summary** (2-3 paragraphs)
    - Overview of the company's requirements
@@ -832,9 +848,9 @@ Generate a structured, professional AWS Landing Zone design document with the fo
    - Overall landing zone strategy
 
 2. **Business Structure**
-   - Account organization strategy
+   - Account/Subscription organization strategy ({"Accounts" if cloud_provider == "AWS" else "Subscriptions" if cloud_provider == "Azure" else "Projects"})
    - Environment segregation approach
-   - Business unit or regional account structure
+   - Business unit or regional structure
 
 3. **Compliance & Security**
    - Regulatory requirements
@@ -843,7 +859,7 @@ Generate a structured, professional AWS Landing Zone design document with the fo
    - Security controls
 
 4. **Network Architecture**
-   - Connectivity approach (VPN, Direct Connect, hybrid)
+   - Connectivity approach ({"VPN, Direct Connect, hybrid" if cloud_provider == "AWS" else "VPN, ExpressRoute, hybrid" if cloud_provider == "Azure" else "VPN, Interconnect, hybrid"})
    - Network isolation strategy
    - Centralized services design
    - Traffic inspection and routing
@@ -870,7 +886,9 @@ Generate a structured, professional AWS Landing Zone design document with the fo
 - Bullet points for clarity
 - Professional tone
 - Technical but accessible language
-- Include specific AWS service recommendations where applicable
+- Include specific {cloud_provider} service recommendations where applicable
+- **The report title must include: {cloud_provider} Landing Zone Architecture Report**
+- **The date in the report must be: {current_date}**
 
 Generate the complete report now:
 """

@@ -633,7 +633,7 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
       ]
     };
 
-    const cloudProviders = ['AWS', 'Azure', 'GCP'];
+    const cloudProviders = ['AWS', 'Azure'];
     const continents = ['North America', 'Europe', 'Asia Pacific', 'Middle East', 'South America'];
     const regionStrategies = ['Single Region', 'Dual Primary Regions', 'Primary + DR'];
 
@@ -1112,7 +1112,7 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
       ]
     };
 
-    const cloudProviders = ['AWS', 'Azure', 'GCP'];
+    const cloudProviders = ['AWS', 'Azure'];
     const continents = ['North America', 'Europe', 'Asia Pacific', 'Middle East', 'South America'];
     const regionStrategies = ['Single Region', 'Dual Primary Regions', 'Primary + DR'];
 

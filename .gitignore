@@ -35,6 +35,10 @@ dist/
 .env
 .env.local
 
+# Google Cloud Service Account credentials
+*.json
+backend/*.json
+
 # IDE
 .vscode/
 .idea/

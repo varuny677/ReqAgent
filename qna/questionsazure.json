@@ -1,0 +1,372 @@
+{
+  "sections": [
+    {
+      "title": "1. Tenant Management",
+      "questions": [
+        {
+          "id": "Q1",
+          "text": "Do you have an existing Azure AD tenant?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q1.1"] },
+            { "label": "No", "value": "no", "next": ["Q1.2", "Q1.3"] }
+          ]
+        },
+        {
+          "id": "Q1.1",
+          "parent": "Q1",
+          "text": "Is the tenant shared across multiple business units or dedicated?",
+          "show": false,
+          "options": [
+            { "label": "Shared across multiple business units", "value": "shared" },
+            { "label": "Dedicated to single business unit", "value": "dedicated" }
+          ]
+        },
+        {
+          "id": "Q1.2",
+          "parent": "Q1",
+          "text": "Will you create a new tenant?",
+          "show": false,
+          "options": [
+            { "label": "Yes, create new tenant", "value": "yes" },
+            { "label": "No, use existing setup", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q1.3",
+          "parent": "Q1",
+          "text": "Should it integrate with on-premises AD or third-party IdPs?",
+          "show": false,
+          "options": [
+            { "label": "Integrate with on-premises Active Directory", "value": "onprem" },
+            { "label": "Integrate with third-party Identity Providers", "value": "thirdparty" },
+            { "label": "Azure AD only (no integration)", "value": "aadonly" }
+          ]
+        },
+        {
+          "id": "Q2",
+          "text": "Is tenant isolation required due to regulatory or business compliance?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q2.1", "Q2.2"] },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q2.1",
+          "parent": "Q2",
+          "text": "Are data residency or regional restrictions driving tenant isolation?",
+          "show": false,
+          "options": [
+            { "label": "Yes, data residency requirements exist", "value": "yes" },
+            { "label": "No regional restrictions", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q2.2",
+          "parent": "Q2",
+          "text": "Will tenants be centrally or federated managed?",
+          "show": false,
+          "options": [
+            { "label": "Centrally managed", "value": "central" },
+            { "label": "Federated managed", "value": "federated" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "2. Management Groups",
+      "questions": [
+        {
+          "id": "Q4",
+          "text": "Do you have existing management group hierarchies?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q4.1"] },
+            { "label": "No", "value": "no", "next": ["Q4.2"] }
+          ]
+        },
+        {
+          "id": "Q4.1",
+          "parent": "Q4",
+          "text": "Does your hierarchy align to business units or workload types?",
+          "show": false,
+          "options": [
+            { "label": "Business units", "value": "bu" },
+            { "label": "Workload types", "value": "wt" },
+            { "label": "Mixed approach", "value": "mixed" }
+          ]
+        },
+        {
+          "id": "Q4.2",
+          "parent": "Q4",
+          "text": "Should your hierarchy align to business units or workload types?",
+          "show": false,
+          "options": [
+            { "label": "Business units", "value": "bu" },
+            { "label": "Workload types", "value": "wt" },
+            { "label": "Mixed approach", "value": "mixed" }
+          ]
+        },
+        {
+          "id": "Q7",
+          "text": "Are regional or geographic factors impacting management group design?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q_governance",
+          "text": "Will governance policies be enforced at management group levels?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q_regulatory_framework", "Q_policy_type", "Q_compliance_requirements"] },
+            { "label": "No, manual governance", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q_regulatory_framework",
+          "parent": "Q_governance",
+          "text": "Which regulatory framework do you follow?",
+          "show": false,
+          "options": [
+            { "label": "PCI DSS", "value": "pci" },
+            { "label": "NIST", "value": "nist" },
+            { "label": "ISO 27001", "value": "iso" },
+            { "label": "GDPR", "value": "gdpr" },
+            { "label": "HIPAA", "value": "hipaa" },
+            { "label": "SOX", "value": "sox" },
+            { "label": "FedRAMP", "value": "fedramp" },
+            { "label": "Other", "value": "other" },
+            { "label": "None / Not applicable", "value": "none" }
+          ]
+        },
+        {
+          "id": "Q_compliance_requirements",
+          "parent": "Q_regulatory_framework",
+          "text": "What specific compliance requirements does this framework mandate?",
+          "show": false,
+          "options": [
+            { "label": "Data encryption at rest and in transit", "value": "encrypt" },
+            { "label": "Strict access controls and identity management", "value": "access" },
+            { "label": "Comprehensive audit logging and monitoring", "value": "audit" },
+            { "label": "Data residency and geographic restrictions", "value": "geo" },
+            { "label": "Network segmentation and isolation", "value": "network" },
+            { "label": "Regular vulnerability assessments and patching", "value": "patch" },
+            { "label": "Incident response and disaster recovery procedures", "value": "dr" },
+            { "label": "All of the above", "value": "all" }
+          ]
+        },
+        {
+          "id": "Q_policy_type",
+          "parent": "Q_governance",
+          "text": "Will these use built-in Azure Policy initiatives or custom ones?",
+          "show": false,
+          "options": [
+            { "label": "Built-in Azure Policy initiatives", "value": "builtin" },
+            { "label": "Custom policy initiatives", "value": "custom" },
+            { "label": "Mixed approach", "value": "mixed" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "3. Subscriptions",
+      "questions": [
+        {
+          "id": "Q8",
+          "text": "Do you have existing subscriptions to onboard?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q8.1"] },
+            { "label": "No", "value": "no", "next": ["Q8.2"] }
+          ]
+        },
+        {
+          "id": "Q8.1",
+          "parent": "Q8",
+          "text": "Are naming conventions and tagging standards followed?",
+          "show": false,
+          "options": [
+            { "label": "Yes, standards are followed", "value": "yes" },
+            { "label": "Partially implemented", "value": "partial" },
+            { "label": "No standards in place", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q8.2",
+          "parent": "Q8",
+          "text": "How will new subscriptions be provisioned?",
+          "show": false,
+          "options": [
+            { "label": "Automated provisioning", "value": "auto" },
+            { "label": "Manual provisioning", "value": "manual" },
+            { "label": "Hybrid approach", "value": "hybrid" }
+          ]
+        },
+        {
+          "id": "Q9",
+          "text": "Should policies and lifecycle management be enforced on subscriptions?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q10",
+          "text": "Is segmentation by environment or workload required?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q10.1"] },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q10.1",
+          "parent": "Q10",
+          "text": "Will shared services be hosted in separate platform subscriptions?",
+          "show": false,
+          "options": [
+            { "label": "Yes, separate platform subscriptions", "value": "yes" },
+            { "label": "No, integrated approach", "value": "no" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "4. Network",
+      "questions": [
+        {
+          "id": "Q11",
+          "text": "Is centralized connectivity and traffic inspection mandatory?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q11.1", "Q11.2"] },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q11.1",
+          "parent": "Q11",
+          "text": "Will you implement a hub-spoke or Virtual WAN topology?",
+          "show": false,
+          "options": [
+            { "label": "Hub-spoke topology", "value": "hub" },
+            { "label": "Virtual WAN topology", "value": "vwan" },
+            { "label": "Other", "value": "other" }
+          ]
+        },
+        {
+          "id": "Q11.2",
+          "parent": "Q11",
+          "text": "Will shared services like DNS, firewall, VPN reside in the centralized hub?",
+          "show": false,
+          "options": [
+            { "label": "Yes, all shared services in hub", "value": "yes" },
+            { "label": "Some services in hub, some distributed", "value": "partial" },
+            { "label": "No, distributed approach", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q12",
+          "text": "Is hybrid/on-premises connectivity required?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q12.1"] },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q12.1",
+          "parent": "Q12",
+          "text": "Which connectivity method will you use?",
+          "show": false,
+          "options": [
+            { "label": "ExpressRoute", "value": "express" },
+            { "label": "VPN", "value": "vpn" },
+            { "label": "SD-WAN", "value": "sdwan" },
+            { "label": "Other", "value": "other" }
+          ]
+        },
+        {
+          "id": "Q13",
+          "text": "Will you enforce network micro-segmentation and Zero Trust?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q14",
+          "text": "Are network flow logs and audit trails mandatory?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "5. Cost Management",
+      "questions": [
+        {
+          "id": "Q21",
+          "text": "Are budgets and chargeback models linked to subscriptions?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q22",
+          "text": "Should tagging for cost attribution be enforced?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "6. DevOps Integration",
+      "questions": [
+        {
+          "id": "Q23",
+          "text": "Is infrastructure provisioning automated via Infrastructure as Code (IaC)?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes", "next": ["Q23.1"] },
+            { "label": "No", "value": "no" }
+          ]
+        },
+        {
+          "id": "Q23.1",
+          "parent": "Q23",
+          "text": "Will you use centralized or distributed pipelines?",
+          "show": false,
+          "options": [
+            { "label": "Centralized pipelines", "value": "central" },
+            { "label": "Distributed pipelines", "value": "dist" },
+            { "label": "Hybrid approach", "value": "hybrid" }
+          ]
+        },
+        {
+          "id": "Q24",
+          "text": "Are security and compliance scans integrated in pipelines?",
+          "show": true,
+          "options": [
+            { "label": "Yes", "value": "yes" },
+            { "label": "No", "value": "no" }
+          ]
+        }
+      ]
+    }
+  ]
+}

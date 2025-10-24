@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Azure Landing Zone Questionnaire</title>
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: #f4f6f9;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+      }
+      h1 {
+        text-align: center;
+        color: #0078d7;
+      }
+      h2 {
+        border-bottom: 2px solid #0078d7;
+        padding-bottom: 5px;
+        margin-top: 30px;
+      }
+      .question {
+        margin: 20px 0;
+        padding: 15px;
+        border-radius: 8px;
+        background: #f8f9fb;
+        border-left: 4px solid #0078d7;
+      }
+      .options label {
+        display: block;
+        margin: 8px 0;
+        cursor: pointer;
+      }
+      button {
+        background: #0078d7;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      button:hover {
+        background: #005fa3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Azure Landing Zone Questionnaire</h1>
+      <canvas id="questionCanvas" width="800" height="100"></canvas>
+      <div id="questionnaire"></div>
+    </div>
+
+    <script>
+      async function loadQuestions() {
+        const response = await fetch("questions.json");
+        const data = await response.json();
+        renderQuestions(data);
+      }
+
+      function renderQuestions(data) {
+        const container = document.getElementById("questionnaire");
+        container.innerHTML = "";
+
+        data.sections.forEach((section) => {
+          const sectionTitle = document.createElement("h2");
+          sectionTitle.textContent = section.title;
+          container.appendChild(sectionTitle);
+
+          section.questions.forEach((question) => {
+            createQuestion(container, question, section.questions);
+          });
+        });
+      }
+
+      function createQuestion(container, question, allQuestions) {
+        const div = document.createElement("div");
+        div.className = "question";
+        div.id = question.id;
+        div.style.display = question.show ? "block" : "none";
+
+        const qText = document.createElement("p");
+        qText.textContent = question.text;
+        div.appendChild(qText);
+
+        const optionsDiv = document.createElement("div");
+        optionsDiv.className = "options";
+
+        question.options.forEach((opt) => {
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = question.id;
+          input.value = opt.value;
+          label.appendChild(input);
+          label.append(" " + opt.label);
+
+          input.addEventListener("change", () => {
+            // hide follow-ups first
+            allQuestions.forEach((q) => {
+              if (q.parent === question.id) {
+                document.getElementById(q.id).style.display = "none";
+              }
+            });
+
+            // show conditional next questions
+            if (opt.next) {
+              opt.next.forEach((nextId) => {
+                const nextQ = document.getElementById(nextId);
+                if (nextQ) nextQ.style.display = "block";
+              });
+            }
+          });
+
+          optionsDiv.appendChild(label);
+        });
+
+        div.appendChild(optionsDiv);
+        container.appendChild(div);
+      }
+
+      // Draw Canvas Header
+      function drawCanvas() {
+        const canvas = document.getElementById("questionCanvas");
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#0078d7";
+        ctx.font = "20px Segoe UI";
+        ctx.fillText("Microsoft Azure Landing Zone Assessment", 140, 60);
+      }
+
+      drawCanvas();
+      loadQuestions();
+    </script>
+  </body>
+</html>

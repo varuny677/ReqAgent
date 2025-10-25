@@ -20,6 +20,7 @@ function Questionnaire() {
   const [visibleQuestions, setVisibleQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
   const [companyData, setCompanyData] = useState(null);
   const [configData, setConfigData] = useState(null);
   const [error, setError] = useState(null);
@@ -360,7 +361,7 @@ function Questionnaire() {
 
   const handleSubmit = async () => {
     try {
-      setLoading(true);
+      setGeneratingSummary(true);
       setError(null);
 
       const response = await axios.post(`${API_BASE_URL}/api/questionnaire/submit`, {
@@ -378,7 +379,7 @@ function Questionnaire() {
       console.error('Error submitting questionnaire:', err);
       setError('Failed to submit questionnaire. Please try again.');
     } finally {
-      setLoading(false);
+      setGeneratingSummary(false);
     }
   };
 
@@ -489,6 +490,15 @@ function Questionnaire() {
     );
   }
 
+  if (generatingSummary) {
+    return (
+      <div className="questionnaire-loading">
+        <div className="loading-spinner"></div>
+        <p>Generating summary...</p>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="questionnaire-error">
@@ -529,7 +539,7 @@ function Questionnaire() {
           <button
             onClick={handleSubmit}
             className="submit-button"
-            disabled={loading || analyzing}
+            disabled={loading || analyzing || generatingSummary}
           >
             Submit & Generate Summary
           </button>

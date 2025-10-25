@@ -19,13 +19,13 @@
 .questionnaire-header h1 {
   font-size: 32px;
   font-weight: 600;
-  color: #ececf1;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .company-info-header {
   font-size: 16px;
-  color: #8e8ea0;
+  color: var(--text-secondary);
   margin-bottom: 16px;
 }
 
@@ -285,8 +285,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 80vh;
+  min-height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
   text-align: center;
+  background-color: var(--bg-primary);
+  z-index: 9999;
 }
 
 .loading-spinner {
@@ -301,7 +307,7 @@
 
 .questionnaire-loading p,
 .questionnaire-error p {
-  color: #8e8ea0;
+  color: var(--text-secondary);
   font-size: 16px;
   margin-top: 8px;
 }

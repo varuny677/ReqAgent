@@ -1,25 +1,30 @@
 import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { FiPlus, FiSend, FiMessageSquare, FiUser, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiSend, FiMessageSquare, FiUser, FiTrash2, FiMenu, FiX, FiSun, FiMoon } from 'react-icons/fi';
 import { BsRobot } from 'react-icons/bs';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
+import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import Questionnaire from './pages/Questionnaire';
 
 const API_BASE_URL = 'http://localhost:8000';
 
-function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange }) {
+function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange, theme, toggleTheme }) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [companyList, setCompanyList] = useState(null); // Store company list internally
+  const [hasDetailedView, setHasDetailedView] = useState(false); // Track if showing detailed view
 
   // Form state
   const [formSaveStatus, setFormSaveStatus] = useState({}); // Track save status per message
 
   const messagesEndRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,15 +75,9 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
     const userQuery = input.trim();
     setInput('');
     setError(null);
+    setSearchExpanded(true); // Keep search bar expanded during fetch
 
-    // Add user message to UI immediately (optimistic update)
-    const userMessage = {
-      id: uuidv4(),
-      role: 'user',
-      content: userQuery,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    // DON'T add user message to UI - keep search silent
     setLoading(true);
 
     try {
@@ -92,14 +91,31 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
         setCurrentSessionId(response.data.session_id);
       }
 
-      // Add assistant response
-      const assistantMessage = {
-        id: response.data.message_id,
-        role: 'assistant',
-        content: response.data.results,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      const results = response.data.results;
+
+      // If it's a company list, store it internally and show cards
+      if (results.mode === 'company_list' && results.companies) {
+        setCompanyList(results.companies);
+        setHasDetailedView(false);
+
+        // Add only the assistant response (company cards)
+        const assistantMessage = {
+          id: response.data.message_id,
+          role: 'assistant',
+          content: results,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages([assistantMessage]); // Replace messages with just the results
+      } else {
+        // For other responses, add to messages
+        const assistantMessage = {
+          id: response.data.message_id,
+          role: 'assistant',
+          content: results,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
 
       // Refresh sessions list to show the new/updated session
       await onSessionsChange();
@@ -110,10 +126,9 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
         err.response?.data?.detail ||
         'Failed to search companies. Please make sure the backend server and Temporal worker are running.'
       );
-      // Remove the optimistic user message on error
-      setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
     } finally {
       setLoading(false);
+      // Re-enable search bar after results appear
     }
   };
 
@@ -212,48 +227,85 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
     }
 
     if (results.mode === 'company_list') {
-      // Mode 1: Company list with numbers
+      // Mode 1: Company list as cards
       const companies = results.companies;
 
       if (!companies || companies.length === 0) {
         return <p>{results.message || 'No companies found.'}</p>;
       }
 
+      const handleSelectCompany = async (companyNumber) => {
+        // Directly fetch company details without showing number in UI
+        setLoading(true);
+        setError(null);
+        setHasDetailedView(true); // Mark that we're showing details
+
+        try {
+          const response = await axios.post(`${API_BASE_URL}/api/search`, {
+            query: companyNumber.toString(),
+            session_id: currentSessionId,
+          });
+
+          // Replace messages with detailed view (no number shown)
+          const assistantMessage = {
+            id: response.data.message_id,
+            role: 'assistant',
+            content: response.data.results,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages([assistantMessage]); // Replace with just the detailed info
+          await onSessionsChange();
+        } catch (err) {
+          console.error('Error selecting company:', err);
+          setError('Failed to load company details');
+        } finally {
+          setLoading(false);
+        }
+      };
+
       return (
-        <div>
-          <p style={{ marginBottom: '12px', fontWeight: 'bold' }}>
-            {results.message || `Found ${results.count} companies:`}
-          </p>
-          {companies.map((company) => (
-            <div key={company.number} className="company-card">
-              <div className="company-number">{company.number}</div>
-              <div className="company-details">
-                <h3>{company.name || 'N/A'}</h3>
-                {company.description && <p>{company.description}</p>}
-                {company.industry && (
-                  <p>
-                    <strong>Industry:</strong> {company.industry}
-                  </p>
-                )}
-                {company.location && (
-                  <p>
-                    <strong>Location:</strong> {company.location}
-                  </p>
-                )}
-                {company.website && (
-                  <p>
-                    <strong>Website:</strong>{' '}
-                    <a href={company.website} target="_blank" rel="noopener noreferrer">
-                      {company.website}
-                    </a>
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-          <p style={{ marginTop: '16px', fontStyle: 'italic', color: '#666' }}>
-            💡 Enter a number (1-{companies.length}) to get detailed information
-          </p>
+        <div className="company-cards-container">
+          <div className="company-cards-grid">
+            {companies.map((company) => (
+              <motion.div
+                key={company.number}
+                className="company-card-modern"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: company.number * 0.1 }}
+                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              >
+                <div className="company-card-header">
+                  <h3>{company.name || 'N/A'}</h3>
+                  {company.industry && (
+                    <span className="company-industry-tag">{company.industry}</span>
+                  )}
+                </div>
+                <div className="company-card-body">
+                  {company.description && <p className="company-description">{company.description}</p>}
+                  {company.location && (
+                    <p className="company-info-item">
+                      <strong>Location:</strong> {company.location}
+                    </p>
+                  )}
+                  {company.website && (
+                    <p className="company-info-item company-website">
+                      <strong>Website:</strong>{' '}
+                      <a href={company.website} target="_blank" rel="noopener noreferrer">
+                        {company.website}
+                      </a>
+                    </p>
+                  )}
+                </div>
+                <button
+                  className="company-select-btn"
+                  onClick={() => handleSelectCompany(company.number)}
+                >
+                  Select
+                </button>
+              </motion.div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -1235,40 +1287,74 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
 
   return (
     <div className="main-content">
+        {/* Theme Toggle Button */}
+        <button className="theme-toggle-btn" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+          {theme === 'dark' ? <FiSun /> : <FiMoon />}
+        </button>
+
+        {/* Search Bar - Always visible at top, disabled when viewing details */}
+        <motion.div
+          className={`search-bar-container-top ${searchExpanded ? 'expanded' : ''}`}
+          initial={false}
+          animate={{
+            width: searchExpanded ? '90%' : '500px',
+          }}
+          transition={{ duration: 0.35, ease: [0.4, 0.0, 0.2, 1] }}
+        >
+          <form className={`search-bar-form ${loading || hasDetailedView ? 'disabled' : ''}`} onSubmit={handleSubmit}>
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="search-bar-input"
+              placeholder={loading ? "Searching..." : "Search for companies..."}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onFocus={() => !loading && !hasDetailedView && setSearchExpanded(true)}
+              onBlur={() => !loading && !hasDetailedView && setSearchExpanded(false)}
+              disabled={loading || hasDetailedView}
+            />
+            <button
+              type="submit"
+              className="search-submit-btn"
+              disabled={loading || !input.trim() || hasDetailedView}
+            >
+              ▶
+            </button>
+          </form>
+
+          {/* Spinner below search bar when loading */}
+          {loading && (
+            <div className="search-loading-spinner">
+              <div className="spinner"></div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Main Content Area */}
         <div className="chat-container">
           {messages.length === 0 ? (
             <div className="empty-state">
               <h1>Company Search Agent</h1>
-              <p>Search for companies by name to get a numbered list.</p>
-              <p>Then enter a number to get detailed company information.</p>
+              <p>Search for companies by name to get top 3 matches.</p>
+              <p>Click on a company card to get detailed information.</p>
             </div>
           ) : (
             <div className="messages">
               {messages.map((message) => (
                 <div key={message.id} className={`message ${message.role}`}>
-                  <div className="message-icon">
-                    {message.role === 'user' ? <FiUser /> : <BsRobot />}
-                  </div>
-                  <div className="message-content">
-                    {message.role === 'user' ? (
-                      <p>{message.content}</p>
-                    ) : (
-                      renderCompanyResults(message.content, message.id)
-                    )}
-                  </div>
+                  {message.role === 'assistant' && (
+                    <div className="message-content-full">
+                      {renderCompanyResults(message.content, message.id)}
+                    </div>
+                  )}
                 </div>
               ))}
               {loading && (
-                <div className="message assistant">
-                  <div className="message-icon">
-                    <BsRobot />
-                  </div>
-                  <div className="message-content">
-                    <div className="loading">
-                      <div className="loading-dot"></div>
-                      <div className="loading-dot"></div>
-                      <div className="loading-dot"></div>
-                    </div>
+                <div className="loading-overlay">
+                  <div className="loading">
+                    <div className="loading-dot"></div>
+                    <div className="loading-dot"></div>
+                    <div className="loading-dot"></div>
                   </div>
                 </div>
               )}
@@ -1277,72 +1363,121 @@ function ChatInterface({ currentSessionId, setCurrentSessionId, onSessionsChange
           )}
           {error && <div className="error-message">{error}</div>}
         </div>
-
-        {/* Input Container */}
-        <div className="input-container">
-          <div className="input-wrapper">
-            <form className="input-form" onSubmit={handleSubmit}>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Enter company name or number... (e.g., metlife or 1)"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={loading}
-              />
-              <button
-                type="submit"
-                className="send-btn"
-                disabled={loading || !input.trim()}
-              >
-                <FiSend />
-              </button>
-            </form>
-          </div>
-        </div>
       </div>
   );
 }
 
 // Sidebar component that persists across routes
 function Sidebar({ sessions, currentSessionId, sessionsLoading, onNewChat, onSelectSession, onDeleteSession }) {
+  // State for sidebar collapse - persisted in localStorage
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Save collapse state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed));
+  }, [isCollapsed]);
+
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
+  // Framer Motion variants for smooth animation
+  const sidebarVariants = {
+    expanded: {
+      width: 260,
+      transition: {
+        duration: 0.35,
+        ease: [0.4, 0.0, 0.2, 1] // Custom easing for smooth feel
+      }
+    },
+    collapsed: {
+      width: 0,
+      transition: {
+        duration: 0.35,
+        ease: [0.4, 0.0, 0.2, 1]
+      }
+    }
+  };
+
+  const contentVariants = {
+    expanded: {
+      opacity: 1,
+      transition: {
+        duration: 0.25,
+        delay: 0.1
+      }
+    },
+    collapsed: {
+      opacity: 0,
+      transition: {
+        duration: 0.15
+      }
+    }
+  };
+
   return (
-    <div className="sidebar">
-      <div className="sidebar-header">
-        <button className="new-chat-btn" onClick={onNewChat}>
-          <FiPlus /> New Chat
-        </button>
-      </div>
-      <div className="chat-history">
-        {sessionsLoading ? (
-          <div className="loading-sessions">Loading sessions...</div>
-        ) : sessions.length === 0 ? (
-          <div className="no-sessions">No sessions yet</div>
-        ) : (
-          sessions.map((session) => (
-            <div
-              key={session.id}
-              className={`chat-history-item ${currentSessionId === session.id ? 'active' : ''}`}
-            >
-              <button
-                className="session-button"
-                onClick={() => onSelectSession(session.id)}
-              >
-                <FiMessageSquare />
-                <span className="session-title">{session.title}</span>
-              </button>
-              <button
-                className="delete-session-btn"
-                onClick={(e) => onDeleteSession(session.id, e)}
-                title="Delete session"
-              >
-                <FiTrash2 />
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
+    <>
+      {/* Toggle Button - Always visible */}
+      <button
+        className={`sidebar-toggle-btn ${isCollapsed ? 'collapsed' : ''}`}
+        onClick={toggleSidebar}
+        title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {isCollapsed ? <FiMenu size={20} /> : <FiX size={20} />}
+      </button>
+
+      {/* Animated Sidebar */}
+      <motion.div
+        className="sidebar"
+        initial={false}
+        animate={isCollapsed ? "collapsed" : "expanded"}
+        variants={sidebarVariants}
+      >
+        <motion.div
+          className="sidebar-content"
+          variants={contentVariants}
+          animate={isCollapsed ? "collapsed" : "expanded"}
+        >
+          <div className="sidebar-header">
+            <button className="new-chat-btn" onClick={onNewChat}>
+              <FiPlus /> New Chat
+            </button>
+          </div>
+          <div className="chat-history">
+            {sessionsLoading ? (
+              <div className="loading-sessions">Loading sessions...</div>
+            ) : sessions.length === 0 ? (
+              <div className="no-sessions">No sessions yet</div>
+            ) : (
+              sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`chat-history-item ${currentSessionId === session.id ? 'active' : ''}`}
+                >
+                  <button
+                    className="session-button"
+                    onClick={() => onSelectSession(session.id)}
+                  >
+                    <FiMessageSquare />
+                    <span className="session-title">{session.title}</span>
+                  </button>
+                  <button
+                    className="delete-session-btn"
+                    onClick={(e) => onDeleteSession(session.id, e)}
+                    title="Delete session"
+                  >
+                    <FiTrash2 />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </>
   );
 }
 
@@ -1354,9 +1489,25 @@ function App() {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const navigate = useNavigate();
 
+  // Theme management with localStorage persistence
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved || 'dark';
+  });
+
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // Apply theme to document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   const fetchSessions = async () => {
     try {
@@ -1415,6 +1566,8 @@ function App() {
               currentSessionId={currentSessionId}
               setCurrentSessionId={setCurrentSessionId}
               onSessionsChange={fetchSessions}
+              theme={theme}
+              toggleTheme={toggleTheme}
             />
           }
         />

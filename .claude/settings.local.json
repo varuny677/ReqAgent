@@ -17,7 +17,12 @@
       "Bash(tree:*)",
       "Bash(cat:*)",
       "Bash(npm install:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(venv/Scripts/python:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

@@ -41,17 +41,20 @@ async def search_companies(company_names: str) -> Dict[str, Any]:
 
     I need you to search for the following companies: {company_names}
 
+    IMPORTANT: Return EXACTLY 3 companies maximum. Choose the 3 most relevant matches.
+
     For each company name provided, please:
     1. Search for companies with exact or similar names
     2. Include variations, subsidiaries, or related companies
-    3. Provide the following information for each match:
+    3. Select the TOP 3 most relevant matches
+    4. Provide the following information for each match:
        - Official company name
        - Brief description (1-2 sentences)
        - Industry/sector
        - Location/headquarters (if available)
        - Website (if available)
 
-    Format your response as a JSON array of company objects.
+    Format your response as a JSON array of company objects with EXACTLY 3 entries.
     Each object should have: name, description, industry, location, website
 
     If a field is not available, use null.
@@ -84,6 +87,12 @@ async def search_companies(company_names: str) -> Dict[str, Any]:
                 result_text = result_text.split("```")[1].split("```")[0]
 
             companies = json.loads(result_text.strip())
+
+            # Ensure we return exactly 3 companies maximum
+            if isinstance(companies, list) and len(companies) > 3:
+                companies = companies[:3]
+                activity.logger.info(f"Limited results to 3 companies")
+
         except (json.JSONDecodeError, IndexError):
             # If parsing fails, return the raw text
             activity.logger.warning(

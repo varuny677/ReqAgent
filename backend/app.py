@@ -17,8 +17,12 @@ from temporalio.client import Client
 
 from config import settings
 from workflows import CompanySearchWorkflow, CompanyDetailWorkflow
-from services import FirestoreService
-from activities import infer_presumptive_config, infer_questionnaire_answers
+from services import FirestoreService, get_or_create_context
+from activities import (
+    infer_presumptive_config,
+    infer_questionnaire_answers,
+    predict_single_question_with_rag
+)
 import json
 
 
@@ -124,6 +128,15 @@ class QuestionnaireSubmitRequest(BaseModel):
 
     session_id: str
     answers: Dict[str, Any]
+    company_data: Dict[str, Any]
+    configuration: Dict[str, Any]
+
+
+class SingleQuestionPredictRequest(BaseModel):
+    """Request model for predicting a single question with RAG."""
+
+    session_id: str
+    question_id: str
     company_data: Dict[str, Any]
     configuration: Dict[str, Any]
 
@@ -682,10 +695,15 @@ async def get_questionnaire(session_id: str) -> Dict[str, Any]:
         )
 
 
+# LEGACY: Batch prediction endpoint (pre-RAG)
+# Kept for fallback/comparison purposes
 @app.post("/api/questionnaire/predict")
 async def predict_questionnaire_answers(request: QuestionnairePredictRequest) -> Dict[str, Any]:
     """
-    Predict answers for questionnaire questions using AI.
+    Predict answers for questionnaire questions using AI (LEGACY - Batch mode).
+
+    This is the original batch prediction endpoint without RAG enhancement.
+    Use /api/questionnaire/predict-with-rag for RAG-enhanced predictions.
 
     Args:
         request: Prediction request containing question IDs and context
@@ -694,7 +712,7 @@ async def predict_questionnaire_answers(request: QuestionnairePredictRequest) ->
         AI predictions, assumptions, and confidence levels
     """
     try:
-        logger.info(f"Predicting answers for {len(request.question_ids)} questions")
+        logger.info(f"[LEGACY] Predicting answers for {len(request.question_ids)} questions")
 
         # Load questions data
         questions_file_path = os.path.join(
@@ -722,6 +740,108 @@ async def predict_questionnaire_answers(request: QuestionnairePredictRequest) ->
         raise HTTPException(
             status_code=500,
             detail=f"Error predicting answers: {str(e)}"
+        )
+
+
+@app.post("/api/questionnaire/predict-single")
+async def predict_single_question(request: SingleQuestionPredictRequest) -> Dict[str, Any]:
+    """
+    Predict answer for a single question with RAG enhancement.
+
+    This endpoint processes one question at a time with:
+    - Smart RAG filtering (only uses RAG for technical/compliance questions)
+    - Context accumulation (considers previous predictions)
+    - Document retrieval from RAG API
+    - LLM prediction with full context
+
+    Args:
+        request: Single question prediction request
+
+    Returns:
+        Prediction result with RAG metadata
+    """
+    try:
+        logger.info(f"[RAG] Predicting single question: {request.question_id}")
+
+        # Load questions data
+        questions_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "qna",
+            "Questions.json"
+        )
+
+        with open(questions_file_path, 'r') as f:
+            questions_data = json.load(f)
+
+        # Find the question
+        all_questions = questions_data.get("questions", [])
+        question = next(
+            (q for q in all_questions if q.get("id") == request.question_id),
+            None
+        )
+
+        if not question:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Question {request.question_id} not found"
+            )
+
+        # Get prediction context
+        prediction_context = get_or_create_context(request.session_id)
+        context_summary = prediction_context.get_context_summary(
+            include_reasoning=True,
+            include_sources=False,
+            max_predictions=10  # Last 10 predictions for context
+        )
+
+        # Call RAG-enhanced prediction activity
+        result = await predict_single_question_with_rag(
+            question_id=request.question_id,
+            question_data=question,
+            company_data=request.company_data,
+            configuration=request.configuration,
+            session_id=request.session_id,
+            context_summary=context_summary
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error predicting single question: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error predicting question: {str(e)}"
+        )
+
+
+@app.get("/api/questionnaire/context/{session_id}")
+async def get_prediction_context(session_id: str) -> Dict[str, Any]:
+    """
+    Get prediction context and statistics for a session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        Context summary and statistics
+    """
+    try:
+        prediction_context = get_or_create_context(session_id)
+
+        return {
+            "session_id": session_id,
+            "context_summary": prediction_context.get_context_summary(),
+            "statistics": prediction_context.get_statistics(),
+            "rag_sources": prediction_context.get_all_rag_sources()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting prediction context: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting context: {str(e)}"
         )
 
 

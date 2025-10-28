@@ -1,0 +1,175 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    RAG INTEGRATION ARCHITECTURE                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  YOUR OTHER PROJECT (Agentic AI / Any Application)                     │
+│  Running on: http://localhost:3000 (or any other port)                 │
+│                                                                         │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  1. User asks: "What are IAM best practices?"     │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  2. Your code calls RAG API:                       │                │
+│  │     POST http://localhost:5000/api/retrieve        │                │
+│  │     Body: {"query": "...", "top_k": 6}             │                │
+│  └────────────────────────────────────────────────────┘                │
+└─────────────────────────────────────────────────────────────────────────┘
+                            │
+                            │ HTTP Request
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RAG API SERVER (This Project)                                         │
+│  Running on: http://localhost:5000                                     │
+│  Terminal: python api.py                                               │
+│                                                                         │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  3. RAG API receives request                       │                │
+│  │     - Generates query embedding                    │                │
+│  │     - Routes to relevant centroids                 │                │
+│  │     - Searches 30,608 document chunks              │                │
+│  │     - Returns top 6 most relevant chunks           │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  4. Returns JSON with chunks:                      │                │
+│  │     {                                              │                │
+│  │       "chunks": [                                  │                │
+│  │         {                                          │                │
+│  │           "content": "IAM best practices...",      │                │
+│  │           "similarity": 0.85,                      │                │
+│  │           "source": "iam-ug.pdf"                   │                │
+│  │         },                                         │                │
+│  │         ...                                        │                │
+│  │       ]                                            │                │
+│  │     }                                              │                │
+│  └────────────────────────────────────────────────────┘                │
+└─────────────────────────────────────────────────────────────────────────┘
+                            │
+                            │ HTTP Response
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  YOUR OTHER PROJECT (Continued)                                        │
+│                                                                         │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  5. Receives chunks from RAG                       │                │
+│  │     chunks = response.json()['chunks']             │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  6. Format context for YOUR Gemini AI:            │                │
+│  │     context = "\n\n".join([c['content']            │                │
+│  │                           for c in chunks])        │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  7. Send to YOUR Gemini AI:                       │                │
+│  │     model = genai.GenerativeModel('gemini-pro')    │                │
+│  │     response = model.generate_content(             │                │
+│  │         f"Context:\n{context}\n\n                  │                │
+│  │          Question: {user_query}\n\n                │                │
+│  │          Answer:"                                  │                │
+│  │     )                                              │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  8. Get AI-generated answer from YOUR Gemini      │                │
+│  │     answer = response.text                         │                │
+│  └────────────────────────────────────────────────────┘                │
+│                           │                                             │
+│                           ▼                                             │
+│  ┌────────────────────────────────────────────────────┐                │
+│  │  9. Display answer to user                         │                │
+│  │     "IAM best practices include..."               │                │
+│  └────────────────────────────────────────────────────┘                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                           KEY POINTS                                       ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+✅ RAG API: Only retrieves document chunks (NO LLM generation)
+✅ Your Project: Controls the LLM and response generation
+✅ Independent: Both run on different ports (5000 vs 3000/8080/etc.)
+✅ CORS: Already enabled - no configuration needed
+✅ Data Flow: User → Your App → RAG API → Chunks → Your Gemini → Answer
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        WHAT EACH PART DOES                                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────┬──────────────────────────────────────────────────────┐
+│ RAG API (Port 5000) │ • Stores 30,608 AWS document chunks                  │
+│                     │ • Searches for relevant chunks                       │
+│                     │ • Returns chunks with similarity scores              │
+│                     │ • NO LLM response generation                         │
+├─────────────────────┼──────────────────────────────────────────────────────┤
+│ Your Project        │ • Receives user queries                              │
+│ (Any Port)          │ • Calls RAG API to get chunks                        │
+│                     │ • Formats chunks as context                          │
+│                     │ • Sends to YOUR Gemini AI                            │
+│                     │ • Generates final answer                             │
+│                     │ • Controls prompts, logic, UI                        │
+└─────────────────────┴──────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                          SIMPLE EXAMPLE                                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+import requests
+import google.generativeai as genai
+
+# Step 1: Get chunks from RAG
+chunks = requests.post(
+    'http://localhost:5000/api/retrieve',
+    json={'query': 'IAM best practices', 'top_k': 5}
+).json()['chunks']
+
+# Step 2: Format context
+context = "\n\n".join([c['content'] for c in chunks])
+
+# Step 3: Send to YOUR Gemini
+genai.configure(api_key="YOUR_KEY")
+model = genai.GenerativeModel('gemini-pro')
+answer = model.generate_content(f"Context:\n{context}\n\nQuestion: IAM best practices?")
+
+# Step 4: Use the answer
+print(answer.text)
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    RUNNING BOTH SIMULTANEOUSLY                             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Terminal 1:                          Terminal 2 (VS Code Window 2):
+┌──────────────────────────┐        ┌──────────────────────────┐
+│ cd demorag-main          │        │ cd your-agentic-project  │
+│ python api.py            │        │ python your_app.py       │
+│                          │        │                          │
+│ [RAG API Running]        │   ◄──► │ [Your App Running]       │
+│ Port: 5000               │   HTTP │ Port: 3000               │
+└──────────────────────────┘        └──────────────────────────┘
+
+Both run independently, communicate via HTTP!
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                         START COMMANDS                                     ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+# Terminal 1 (RAG API - Keep Running!)
+cd c:\Users\varun\Pictures\Agent1\demorag-main
+python api.py
+
+# Terminal 2 (Your Project - Run Separately)
+cd your-project-directory
+python your_app.py
+
+# Test Connection
+curl http://localhost:5000/api/health

@@ -23,7 +23,8 @@
       "Bash(timeout 10 bash:*)",
       "Bash(venv/Scripts/python:*)",
       "Bash(npm run dev:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

@@ -25,6 +25,16 @@ function Questionnaire() {
   const [configData, setConfigData] = useState(null);
   const [error, setError] = useState(null);
 
+  // RAG Enhancement State
+  const [useRag, setUseRag] = useState(true); // RAG enabled by default
+  const [processingProgress, setProcessingProgress] = useState({
+    current: 0,
+    total: 0,
+    questionId: null,
+    isProcessing: false
+  });
+  const [ragMetadata, setRagMetadata] = useState({}); // Store RAG info per question
+
   // Load company info and configuration on mount
   useEffect(() => {
     loadSessionData();
@@ -229,48 +239,125 @@ function Questionnaire() {
 
     try {
       setAnalyzing(true);
-
-      const response = await axios.post(`${API_BASE_URL}/api/questionnaire/predict`, {
-        session_id: sessionId,
-        question_ids: questionIds,
-        company_data: companyData,
-        configuration: configData,
-        current_answers: answers,
+      setProcessingProgress({
+        current: 0,
+        total: questionIds.length,
+        questionId: null,
+        isProcessing: true
       });
 
-      if (response.data.predictions) {
-        // Merge new predictions with existing ones
-        setAiPredictions(prev => ({ ...prev, ...response.data.predictions }));
+      const newAnswers = { ...answers };
+      const newPredictions = {};
+      const newAssumptions = {};
+      const newRagMetadata = { ...ragMetadata };
 
-        // Apply predictions to answers (auto-preselect)
-        const newAnswers = { ...answers };
-        Object.entries(response.data.predictions).forEach(([qId, prediction]) => {
-          if (prediction && !answers[qId]) {
-            newAnswers[qId] = prediction;
-          }
+      // Process EACH question sequentially
+      for (let i = 0; i < questionIds.length; i++) {
+        const questionId = questionIds[i];
+
+        // Update progress
+        setProcessingProgress({
+          current: i + 1,
+          total: questionIds.length,
+          questionId: questionId,
+          isProcessing: true
         });
-        setAnswers(newAnswers);
 
-        // Store AI assumptions
-        if (response.data.assumptions) {
-          setAiAssumptions(prev => ({ ...prev, ...response.data.assumptions }));
+        // Find question details
+        const question = questions.find(q => q.id === questionId);
+        if (!question || question.type === 'section') continue;
 
-          // Expand assumptions by default
-          const newExpanded = { ...expandedAssumptions };
-          questionIds.forEach(qId => {
-            newExpanded[qId] = true;
-          });
-          setExpandedAssumptions(newExpanded);
+        try {
+          let prediction, reasoning, ragUsed, ragSources;
+
+          if (useRag) {
+            // RAG-ENHANCED MODE: Call single question endpoint
+            const response = await axios.post(
+              `${API_BASE_URL}/api/questionnaire/predict-single`,
+              {
+                session_id: sessionId,
+                question_id: questionId,
+                company_data: companyData,
+                configuration: configData
+              }
+            );
+
+            const result = response.data;
+            prediction = result.prediction;
+            reasoning = result.reasoning;
+            ragUsed = result.rag_used;
+            ragSources = result.rag_sources || [];
+
+            // Store RAG metadata for this question
+            newRagMetadata[questionId] = {
+              ragUsed: ragUsed,
+              ragSources: ragSources,
+              retrievalTime: result.rag_metadata?.retrieval_time,
+              confidence: result.confidence
+            };
+
+          } else {
+            // LEGACY MODE: Use batch endpoint for this single question
+            const response = await axios.post(
+              `${API_BASE_URL}/api/questionnaire/predict`,
+              {
+                session_id: sessionId,
+                question_ids: [questionId],
+                company_data: companyData,
+                configuration: configData,
+                current_answers: newAnswers
+              }
+            );
+
+            const result = response.data;
+            prediction = result.predictions?.[questionId];
+            reasoning = result.assumptions?.[questionId];
+            ragUsed = false;
+            ragSources = [];
+          }
+
+          // Apply prediction if valid
+          if (prediction && !answers[questionId]) {
+            newAnswers[questionId] = prediction;
+            newPredictions[questionId] = prediction;
+            newAssumptions[questionId] = reasoning;
+          }
+
+        } catch (error) {
+          console.error(`Error predicting question ${questionId}:`, error);
+          newAssumptions[questionId] = `⚠️ Prediction failed: ${error.message}`;
         }
 
-        // Save progress
-        await saveProgress(newAnswers, response.data.predictions, response.data.assumptions);
+        // Small delay between questions for better UX
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      // Update all states at once after processing
+      setAnswers(newAnswers);
+      setAiPredictions(prev => ({ ...prev, ...newPredictions }));
+      setAiAssumptions(prev => ({ ...prev, ...newAssumptions }));
+      setRagMetadata(newRagMetadata);
+
+      // Expand assumptions by default
+      const newExpanded = { ...expandedAssumptions };
+      questionIds.forEach(qId => {
+        newExpanded[qId] = true;
+      });
+      setExpandedAssumptions(newExpanded);
+
+      // Save progress
+      await saveProgress(newAnswers, newPredictions, newAssumptions);
+
     } catch (err) {
       console.error('Error performing AI analysis:', err);
-      // Don't show error to user, just log it
     } finally {
       setAnalyzing(false);
+      setProcessingProgress({
+        current: 0,
+        total: 0,
+        questionId: null,
+        isProcessing: false
+      });
     }
   };
 
@@ -401,6 +488,28 @@ function Questionnaire() {
 
     return (
       <div key={question.id} className="question-card">
+        {/* RAG Source Indicator */}
+        {ragMetadata[question.id]?.ragUsed && (
+          <div className="rag-sources-indicator">
+            <div className="rag-sources-header">
+              <span className="rag-icon">📄</span>
+              <span className="rag-label">Based on AWS Documentation:</span>
+            </div>
+            <div className="rag-sources-list">
+              {ragMetadata[question.id].ragSources.map((source, idx) => (
+                <span key={idx} className="rag-source-badge">
+                  {source}
+                </span>
+              ))}
+            </div>
+            {ragMetadata[question.id].retrievalTime && (
+              <div className="rag-retrieval-time">
+                Retrieved in {ragMetadata[question.id].retrievalTime.toFixed(2)}s
+              </div>
+            )}
+          </div>
+        )}
+
         {/* AI Assumptions Dropdown */}
         {hasAssumption && (
           <div className="ai-assumptions">
@@ -524,10 +633,43 @@ function Questionnaire() {
       </div>
 
       <div className="questionnaire-content">
-        {analyzing && (
-          <div className="analyzing-banner">
-            <div className="analyzing-spinner"></div>
-            <span>AI is analyzing questions...</span>
+        {/* RAG Enhancement Toggle */}
+        <div className="rag-toggle-container">
+          <label className="rag-toggle-label">
+            <input
+              type="checkbox"
+              checked={useRag}
+              onChange={(e) => setUseRag(e.target.checked)}
+              className="rag-toggle-checkbox"
+              disabled={analyzing}
+            />
+            <span className="rag-toggle-text">
+              ✨ Use RAG Enhancement
+              <span className="rag-toggle-description">
+                {useRag
+                  ? "(AI will consult AWS documentation for technical questions)"
+                  : "(Using company info only - faster but less detailed)"
+                }
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {/* Progress Indicator */}
+        {processingProgress.isProcessing && (
+          <div className="progress-indicator">
+            <div className="progress-bar-container">
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: `${(processingProgress.current / processingProgress.total) * 100}%`
+                }}
+              />
+            </div>
+            <div className="progress-text">
+              {useRag ? '🔍 Analyzing' : '⚡ Processing'} question {processingProgress.current} of {processingProgress.total}
+              {processingProgress.questionId && ` (${processingProgress.questionId})`}
+            </div>
           </div>
         )}
 

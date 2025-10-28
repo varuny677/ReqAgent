@@ -78,11 +78,7 @@ class RAGFilter:
         """
         Determine if RAG should be used for this question.
 
-        Decision logic:
-        1. Check if question is explicitly excluded -> NO RAG
-        2. Check if section is in enabled sections -> USE RAG
-        3. Check if question contains RAG keywords -> USE RAG
-        4. Default -> NO RAG (simple company info questions)
+        TESTING MODE: Currently forcing RAG for ALL questions to validate retrieval.
 
         Args:
             question_id: Question identifier (e.g., "CL_Q1", "BS_Q1")
@@ -105,47 +101,12 @@ class RAGFilter:
                 "confidence": "high"
             }
 
-        # Rule 1: Explicit exclusions
-        excluded_questions = self.config.get('excluded_questions', [])
-        if question_id in excluded_questions:
-            return {
-                "use_rag": False,
-                "reason": f"Question {question_id} is explicitly excluded",
-                "matched_rule": "excluded_list",
-                "confidence": "high"
-            }
-
-        # Rule 2: Section-based decision
-        section_id = self._extract_section_id(question_id)
-        enabled_sections = self.config.get('rag_enabled_sections', [])
-
-        if section_id in enabled_sections:
-            return {
-                "use_rag": True,
-                "reason": f"Question belongs to RAG-enabled section: {section_id}",
-                "matched_rule": "section_enabled",
-                "confidence": "high"
-            }
-
-        # Rule 3: Keyword matching
-        keywords = self.config.get('rag_keywords', [])
-        matched_keywords = self._find_keywords_in_text(question_text, keywords)
-
-        if matched_keywords:
-            return {
-                "use_rag": True,
-                "reason": f"Question contains RAG keywords: {', '.join(matched_keywords)}",
-                "matched_rule": "keyword_match",
-                "matched_keywords": matched_keywords,
-                "confidence": "medium"
-            }
-
-        # Default: No RAG for simple questions
+        # TESTING MODE: Force RAG for ALL non-section questions
         return {
-            "use_rag": False,
-            "reason": "Simple question that can be answered with company info alone",
-            "matched_rule": "default_no_rag",
-            "confidence": "medium"
+            "use_rag": True,
+            "reason": f"Testing mode - using RAG for all questions to validate retrieval and reasoning",
+            "matched_rule": "testing_force_all_rag",
+            "confidence": "high"
         }
 
     def _extract_section_id(self, question_id: str) -> str:

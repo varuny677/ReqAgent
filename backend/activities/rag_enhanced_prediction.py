@@ -228,7 +228,7 @@ def _build_rag_query(
     configuration: Dict[str, Any]
 ) -> str:
     """
-    Build optimized RAG query that includes question + company context.
+    Build optimized RAG query including company context for better chunk retrieval.
 
     Args:
         question_text: The question to answer
@@ -236,26 +236,29 @@ def _build_rag_query(
         configuration: Config data
 
     Returns:
-        RAG query string
+        RAG query string with company context
     """
-    sector = company_data.get('Sector', '')
+    company_name = company_data.get('Company name', 'the organization')
+    sector = company_data.get('Sector', 'technology')
     compliance = company_data.get('Compliance Requirements', [])
     cloud_provider = configuration.get('cloud_provider', 'AWS')
 
     # Format compliance as string
     if isinstance(compliance, list):
-        compliance_str = ", ".join(compliance)
+        compliance_str = ", ".join(compliance) if compliance else "standard compliance"
     else:
-        compliance_str = str(compliance)
+        compliance_str = str(compliance) if compliance else "standard compliance"
 
+    # Build enhanced query with company context
     query = f"""
-{cloud_provider} cloud architecture for {sector} industry.
+Company: {company_name}
+Industry: {sector}
+Cloud Provider: {cloud_provider}
+Compliance Requirements: {compliance_str}
 
 Question: {question_text}
 
-Company compliance requirements: {compliance_str}
-
-Find relevant best practices, compliance guidelines, and technical recommendations.
+Find relevant {cloud_provider} best practices, compliance guidelines, security recommendations, and technical implementation guidance specific to {sector} industry with {compliance_str} requirements.
 """.strip()
 
     return query
@@ -319,10 +322,10 @@ You are an expert {cloud_provider} Landing Zone architect. Analyze the question 
     if rag_context:
         prompt += f"""
 
-**Relevant AWS Documentation and Best Practices:**
+**Relevant {cloud_provider} Documentation and Best Practices:**
 {rag_context}
 
-Based on the above documentation, industry best practices, and company requirements:
+IMPORTANT: The above documentation has been retrieved specifically for this question. You MUST reference these documents in your reasoning.
 """
 
     prompt += f"""
@@ -334,12 +337,25 @@ Based on the above documentation, industry best practices, and company requireme
 {options_str}
 
 **Task:**
-Analyze the company's characteristics, compliance requirements, previous selections, and documentation (if provided) to predict the most appropriate answer.
+Analyze the company's characteristics, compliance requirements, previous selections, and the retrieved documentation to predict the most appropriate answer.
 
-**Response Format (JSON only):**
+**Response Format Requirements:**
+
+1. Your "reasoning" MUST follow this format if RAG documentation was provided:
+   - START with: "✅ Based on Retrieved {cloud_provider} Documentation:"
+   - List the document names that informed your decision
+   - Then provide key points in BULLET FORMAT (use • bullets)
+   - Keep each bullet concise and focused on ONE key factor
+   - DO NOT repeat company name or compliance requirements in bullets unless absolutely necessary
+   - Focus on technical recommendations and specific findings
+
+2. Example reasoning format:
+   "✅ Based on Retrieved {cloud_provider} Documentation:\\nReferenced: [document names]\\n\\n• Recommends regional account separation for multi-region deployments\\n• Enhances compliance posture through isolation and control\\n• Aligns with security best practices for workload segregation\\n• Facilitates network isolation between environments"
+
+**JSON Response Format:**
 {{
     "prediction": "selected option label" | ["option1", "option2"] | "text answer",
-    "reasoning": "2-3 sentence explanation of why this answer fits the company profile",
+    "reasoning": "MUST start with '✅ Based on Retrieved {cloud_provider} Documentation:' if RAG context provided, followed by Referenced: [docs], then bullet points (• format) with concise technical findings. DO NOT repeat company name/compliance in bullets.",
     "confidence": "high" | "medium" | "low"
 }}
 

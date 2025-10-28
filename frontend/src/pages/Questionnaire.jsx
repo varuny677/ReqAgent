@@ -503,8 +503,8 @@ function Questionnaire() {
               ))}
             </div>
             {ragMetadata[question.id].retrievalTime && (
-              <div className="rag-retrieval-time">
-                Retrieved in {ragMetadata[question.id].retrievalTime.toFixed(2)}s
+              <div className="rag-retrieval-time-only">
+                ⏱️ {ragMetadata[question.id].retrievalTime.toFixed(2)}s
               </div>
             )}
           </div>

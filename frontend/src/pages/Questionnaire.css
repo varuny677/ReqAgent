@@ -475,11 +475,35 @@
   font-weight: 500;
 }
 
+.rag-retrieval-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #0f4c75;
+}
+
+.rag-chunk-count {
+  font-size: 11px;
+  color: #3282b8;
+  font-weight: 500;
+}
+
 .rag-retrieval-time {
   font-size: 11px;
   color: #3282b8;
   font-style: italic;
-  margin-top: 4px;
+}
+
+.rag-retrieval-time-only {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #0f4c75;
+  font-size: 11px;
+  color: #3282b8;
+  font-style: italic;
+  text-align: right;
 }
 
 /* Light mode adjustments for RAG components */
@@ -499,6 +523,19 @@
 
 [data-theme="light"] .rag-retrieval-time {
   color: #0066a1;
+}
+
+[data-theme="light"] .rag-chunk-count {
+  color: #0066a1;
+}
+
+[data-theme="light"] .rag-retrieval-info {
+  border-top-color: #b8dae6;
+}
+
+[data-theme="light"] .rag-retrieval-time-only {
+  color: #0066a1;
+  border-top-color: #b8dae6;
 }
 
 [data-theme="light"] .rag-toggle-container {
